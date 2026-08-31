@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createClient } from "@supabase/supabase-js";
@@ -18,16 +18,6 @@ const supabase = createClient(
 
 type Kind = "museum" | "food" | "sight" | "logistics";
 
-type Stop = {
-  id: string;
-  time: string;
-  title: string;
-  note: string;
-  kind?: Kind;
-  lat?: number;
-  lng?: number;
-};
-
 type Day = {
   id: string;
   label: string;
@@ -35,10 +25,23 @@ type Day = {
   title: string;
   distance: string;
   transport: string;
-  stops: Stop[];
 };
 
-type Comment = {
+type MapPoint = {
+  id: number;
+  day_id: string;
+  position: number;
+  title: string;
+  description: string | null;
+  time: string | null;
+  kind: string | null;
+  lat: number;
+  lng: number;
+  is_custom: boolean;
+  created_at?: string;
+};
+
+type CommentRow = {
   id: number;
   stop_id: string;
   author: string;
@@ -47,7 +50,7 @@ type Comment = {
 };
 
 /* =========================================================
-   THEME
+   CONSTANTS
 ========================================================= */
 
 const theme = {
@@ -60,9 +63,12 @@ const theme = {
   soft: "#f4f4f5",
 };
 
-/* =========================================================
-   PLAN
-========================================================= */
+const accommodation = {
+  title: "Nocleg",
+  address: "Telliskivi tn 26",
+  lat: 59.4398,
+  lng: 24.7315,
+};
 
 const days: Day[] = [
   {
@@ -73,80 +79,7 @@ const days: Day[] = [
     distance: "7–9 km pieszo",
     transport:
       "Lotnisko → Telliskivi: Bolt 15–20 min lub tramwaj T2 do Balti jaam",
-    stops: [
-      {
-        id: "fri-airport",
-        time: "08:55",
-        title: "Lądowanie w Tallinnie",
-        note:
-          "Czas lokalny jest o godzinę do przodu względem Polski. Dla 4 osób z bagażem najwygodniejszy będzie Bolt.",
-        kind: "logistics",
-        lat: 59.4133,
-        lng: 24.8328,
-      },
-      {
-        id: "fri-breakfast",
-        time: "10:00",
-        title: "Bagaże i późne śniadanie",
-        note:
-          "Zostawcie bagaże przy Telliskivi 26. Balti Jaama Turg jest kilka minut pieszo i ma dużo szybkich opcji jedzenia.",
-        kind: "food",
-        lat: 59.4407,
-        lng: 24.7352,
-      },
-      {
-        id: "fri-toompea",
-        time: "11:15",
-        title: "Toompea i najlepsze panoramy",
-        note:
-          "Patkuli → Kohtuotsa → zamek Toompea z zewnątrz → sobór Aleksandra Newskiego → Ogród Króla Duńskiego.",
-        kind: "sight",
-        lat: 59.4366,
-        lng: 24.7386,
-      },
-      {
-        id: "fri-kiek",
-        time: "12:15",
-        title: "Kiek in de Kök i tunele bastionowe",
-        note:
-          "Najlepsze muzeum na połączenie zabytków z historią miasta. Zarezerwujcie około 2 godzin; w tunelach jest 10–12°C.",
-        kind: "museum",
-        lat: 59.4348,
-        lng: 24.7412,
-      },
-      {
-        id: "fri-oldtown",
-        time: "14:30",
-        title: "Dolne Stare Miasto",
-        note:
-          "Niguliste z zewnątrz → Plac Ratuszowy → Raeapteek → Pasaż św. Katarzyny → brama Viru → ulica Pikk i baszta Gruba Małgorzata.",
-        kind: "sight",
-        lat: 59.437,
-        lng: 24.7453,
-      },
-      {
-        id: "fri-rataskaevu",
-        time: "18:00",
-        title: "Kolacja: Rataskaevu 16",
-        note:
-          "Bardzo popularna restauracja w Starym Mieście. Rezerwacja dla 4 osób jest mocno wskazana.",
-        kind: "food",
-        lat: 59.437,
-        lng: 24.742,
-      },
-      {
-        id: "fri-fotografiska",
-        time: "20:15",
-        title: "Fotografiska Night Shift",
-        note:
-          "W piątki muzeum działa do północy. Jest 5 minut od noclegu; opcjonalnie drink na dachu.",
-        kind: "museum",
-        lat: 59.4393,
-        lng: 24.7298,
-      },
-    ],
   },
-
   {
     id: "sat",
     label: "Sobota",
@@ -155,78 +88,7 @@ const days: Day[] = [
     distance: "5–7 km pieszo",
     transport:
       "Telliskivi → Kadriorg: tramwaj lub Bolt; powrót przez Rotermann",
-    stops: [
-      {
-        id: "sat-breakfast",
-        time: "09:00",
-        title: "Śniadanie w okolicy Telliskivi",
-        note: "Zjedzcie blisko noclegu i ruszcie około 09:30.",
-        kind: "food",
-        lat: 59.4393,
-        lng: 24.7298,
-      },
-      {
-        id: "sat-kumu",
-        time: "10:00",
-        title: "Kumu Art Museum",
-        note:
-          "Najważniejsze muzeum sztuki Estonii. Zaplanujcie 2–2,5 godziny.",
-        kind: "museum",
-        lat: 59.4363,
-        lng: 24.7964,
-      },
-      {
-        id: "sat-kadriorg",
-        time: "12:45",
-        title: "Pałac i park Kadriorg",
-        note:
-          "Barokowy pałac, ogród kwiatowy, Staw Łabędzi i rezydencja prezydencka z zewnątrz.",
-        kind: "sight",
-        lat: 59.4385,
-        lng: 24.7908,
-      },
-      {
-        id: "sat-lunch",
-        time: "14:15",
-        title: "Lunch w Kadriorgu",
-        note:
-          "Wybierzcie spokojną kawiarnię lub restaurację w dzielnicy.",
-        kind: "food",
-        lat: 59.4392,
-        lng: 24.789,
-      },
-      {
-        id: "sat-russalka",
-        time: "15:30",
-        title: "Russalka i nadmorska promenada",
-        note: "Krótki spacer do pomnika Russalka.",
-        kind: "sight",
-        lat: 59.4433,
-        lng: 24.7935,
-      },
-      {
-        id: "sat-rotermann",
-        time: "17:00",
-        title: "Rotermann Quarter",
-        note:
-          "Dawne zabudowania przemysłowe połączone ze współczesną architekturą.",
-        kind: "sight",
-        lat: 59.4385,
-        lng: 24.7558,
-      },
-      {
-        id: "sat-rado",
-        time: "19:00",
-        title: "Kolacja: RADO",
-        note:
-          "Nowoczesna kuchnia, menu zmieniane codziennie. Koniecznie rezerwacja.",
-        kind: "food",
-        lat: 59.438,
-        lng: 24.748,
-      },
-    ],
   },
-
   {
     id: "sun",
     label: "Niedziela",
@@ -235,77 +97,6 @@ const days: Day[] = [
     distance: "6–8 km pieszo",
     transport:
       "Większość dnia pieszo od Telliskivi; Bolt tylko przy mocnym deszczu",
-    stops: [
-      {
-        id: "sun-market",
-        time: "09:00",
-        title: "Balti Jaama Turg",
-        note: "Śniadanie i szybkie zakupy.",
-        kind: "food",
-        lat: 59.4407,
-        lng: 24.7352,
-      },
-      {
-        id: "sun-lennusadam",
-        time: "10:00",
-        title: "Seaplane Harbour — Lennusadam",
-        note:
-          "Okręt podwodny Lembit, hangary wodnosamolotów i lodołamacz Suur Tõll.",
-        kind: "museum",
-        lat: 59.4513,
-        lng: 24.7384,
-      },
-      {
-        id: "sun-patarei",
-        time: "12:45",
-        title: "Patarei i Noblessner",
-        note:
-          "Dawna twierdza-więzienie i odnowiony port Noblessner.",
-        kind: "sight",
-        lat: 59.4515,
-        lng: 24.731,
-      },
-      {
-        id: "sun-lore",
-        time: "13:30",
-        title: "Lunch: Lore Bistroo",
-        note:
-          "Restauracja w przemysłowym budynku portowym. Rezerwacja wskazana.",
-        kind: "food",
-        lat: 59.4531,
-        lng: 24.7276,
-      },
-      {
-        id: "sun-kalamaja",
-        time: "15:30",
-        title: "Kalamaja i drewniane domy",
-        note:
-          "Spokojny powrót przez uliczki Kalamaja i Telliskivi Creative City.",
-        kind: "sight",
-        lat: 59.4442,
-        lng: 24.73,
-      },
-      {
-        id: "sun-fhoone",
-        time: "18:30",
-        title: "Ostatnia kolacja: F-Hoone",
-        note:
-          "Luźna, industrialna restauracja w Telliskivi, blisko noclegu.",
-        kind: "food",
-        lat: 59.439,
-        lng: 24.729,
-      },
-      {
-        id: "sun-sleep",
-        time: "21:00",
-        title: "Pakowanie i wczesny sen",
-        note:
-          "Na lot o 07:00 zamówcie Bolt około 04:40–04:45.",
-        kind: "logistics",
-        lat: 59.44,
-        lng: 24.732,
-      },
-    ],
   },
 ];
 
@@ -316,8 +107,21 @@ const labels: Record<Kind, string> = {
   logistics: "Logistyka",
 };
 
+function kindLabel(kind: string | null) {
+  if (
+    kind === "museum" ||
+    kind === "food" ||
+    kind === "sight" ||
+    kind === "logistics"
+  ) {
+    return labels[kind];
+  }
+
+  return "";
+}
+
 /* =========================================================
-   POLYLINE DECODER - VALHALLA
+   VALHALLA POLYLINE
 ========================================================= */
 
 function decodePolyline(
@@ -362,10 +166,141 @@ function decodePolyline(
 }
 
 /* =========================================================
+   COMMENTS
+========================================================= */
+
+function Comments({
+  stopId,
+  username,
+}: {
+  stopId: string;
+  username: string;
+}) {
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadComments() {
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("stop_id", stopId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setError(`Błąd Supabase: ${error.message}`);
+      return;
+    }
+
+    setError("");
+    setComments((data ?? []) as CommentRow[]);
+  }
+
+  useEffect(() => {
+    void loadComments();
+  }, [stopId]);
+
+  async function addComment() {
+    const author = username.trim();
+    const comment = text.trim();
+
+    if (!author) {
+      setError("Najpierw wpisz swoją nazwę u góry strony.");
+      return;
+    }
+
+    if (!comment) return;
+
+    setSending(true);
+    setError("");
+
+    const { error } = await supabase.from("comments").insert({
+      stop_id: stopId,
+      author,
+      comment,
+    });
+
+    if (error) {
+      setError(`Błąd Supabase: ${error.message}`);
+      setSending(false);
+      return;
+    }
+
+    setText("");
+    setSending(false);
+
+    await loadComments();
+  }
+
+  return (
+    <div className="comments">
+      {comments.length > 0 && (
+        <div className="comment-list">
+          {comments.map((comment) => (
+            <div className="comment" key={comment.id}>
+              <div className="comment-header">
+                <strong>{comment.author}</strong>
+
+                <span>
+                  {new Date(comment.created_at).toLocaleString("pl-PL", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+
+              <div>{comment.comment}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="comment-form">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              void addComment();
+            }
+          }}
+          placeholder={
+            username.trim()
+              ? "Dodaj komentarz..."
+              : "Najpierw wpisz swoją nazwę"
+          }
+          maxLength={500}
+        />
+
+        <button
+          onClick={() => void addComment()}
+          disabled={sending || !text.trim()}
+        >
+          {sending ? "..." : "Wyślij"}
+        </button>
+      </div>
+
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
+/* =========================================================
    MAP
 ========================================================= */
 
-function Map({ day }: { day: Day }) {
+function Map({
+  points,
+  adding,
+  onMapClick,
+}: {
+  points: MapPoint[];
+  adding: boolean;
+  onMapClick: (lat: number, lng: number) => void;
+}) {
   const element = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<L.Map | null>(null);
 
@@ -375,23 +310,16 @@ function Map({ day }: { day: Day }) {
   const watchId = useRef<number | null>(null);
 
   const [routeLoading, setRouteLoading] = useState(false);
-  const [routeError, setRouteError] = useState("");
-  const [locationError, setLocationError] = useState("");
-
-  const [locating, setLocating] = useState(false);
-  const [tracking, setTracking] = useState(false);
 
   const [routeInfo, setRouteInfo] = useState<{
     distance: number;
     time: number;
   } | null>(null);
 
-  function points() {
-    return day.stops.filter(
-      (stop): stop is Stop & { lat: number; lng: number } =>
-        stop.lat !== undefined && stop.lng !== undefined
-    );
-  }
+  const [routeError, setRouteError] = useState("");
+  const [locationError, setLocationError] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [tracking, setTracking] = useState(false);
 
   function showWholeRoute() {
     const map = mapInstance.current;
@@ -402,6 +330,8 @@ function Map({ day }: { day: Day }) {
       const bounds = routeLayer.current.getBounds();
 
       if (bounds.isValid()) {
+        bounds.extend([accommodation.lat, accommodation.lng]);
+
         map.fitBounds(bounds, {
           padding: [35, 35],
         });
@@ -410,19 +340,16 @@ function Map({ day }: { day: Day }) {
       }
     }
 
-    const currentPoints = points();
+    const allCoordinates: L.LatLngExpression[] = [
+      [accommodation.lat, accommodation.lng],
+      ...points.map(
+        (point) => [point.lat, point.lng] as L.LatLngExpression
+      ),
+    ];
 
-    if (currentPoints.length) {
-      map.fitBounds(
-        L.latLngBounds(
-          currentPoints.map((point) => [
-            point.lat,
-            point.lng,
-          ])
-        ),
-        { padding: [35, 35] }
-      );
-    }
+    map.fitBounds(L.latLngBounds(allCoordinates), {
+      padding: [35, 35],
+    });
   }
 
   function updateUserLocation(
@@ -439,7 +366,7 @@ function Map({ day }: { day: Day }) {
         radius: 9,
         color: "#ffffff",
         weight: 3,
-        fillColor: "#2563eb",
+        fillColor: theme.blue,
         fillOpacity: 1,
       })
         .addTo(map)
@@ -451,9 +378,9 @@ function Map({ day }: { day: Day }) {
     if (!accuracyCircle.current) {
       accuracyCircle.current = L.circle([lat, lng], {
         radius: accuracy,
-        color: "#2563eb",
+        color: theme.blue,
         weight: 1,
-        fillColor: "#2563eb",
+        fillColor: theme.blue,
         fillOpacity: 0.08,
       }).addTo(map);
     } else {
@@ -462,94 +389,56 @@ function Map({ day }: { day: Day }) {
     }
   }
 
-function findMe() {
-  if (!navigator.geolocation) {
-    setLocationError(
-      "Ta przeglądarka nie obsługuje lokalizacji."
-    );
-    return;
-  }
-
-  // Geolokalizacja w przeglądarce wymaga bezpiecznego kontekstu
-  if (!window.isSecureContext) {
-    setLocationError(
-      "Lokalizacja wymaga połączenia HTTPS."
-    );
-    return;
-  }
-
-  setLocating(true);
-  setLocationError("");
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const { latitude, longitude, accuracy } =
-        position.coords;
-
-      console.log("Pobrano lokalizację:", {
-        latitude,
-        longitude,
-        accuracy,
-      });
-
-      updateUserLocation(
-        latitude,
-        longitude,
-        accuracy
+  function findMe() {
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Ta przeglądarka nie obsługuje lokalizacji."
       );
-
-      mapInstance.current?.setView(
-        [latitude, longitude],
-        16
-      );
-
-      setLocationError("");
-      setLocating(false);
-    },
-
-    (error) => {
-      console.error(
-        "Błąd geolokalizacji:",
-        error.code,
-        error.message
-      );
-
-      switch (error.code) {
-        case 1:
-          setLocationError(
-            "Brak dostępu do lokalizacji. Zezwól tej stronie na korzystanie z lokalizacji w ustawieniach przeglądarki."
-          );
-          break;
-
-        case 2:
-          setLocationError(
-            "Nie udało się ustalić Twojej pozycji. Sprawdź, czy lokalizacja/GPS jest włączona i spróbuj ponownie."
-          );
-          break;
-
-        case 3:
-          setLocationError(
-            "Przekroczono czas oczekiwania na lokalizację. Spróbuj ponownie, najlepiej w miejscu z lepszym zasięgiem GPS."
-          );
-          break;
-
-        default:
-          setLocationError(
-            `Nie udało się pobrać lokalizacji: ${error.message || "nieznany błąd"}`
-          );
-      }
-
-      setLocating(false);
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 30000,
-      maximumAge: 0,
+      return;
     }
-  );
-}
-   
+
+    setLocating(true);
+    setLocationError("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } =
+          position.coords;
+
+        updateUserLocation(latitude, longitude, accuracy);
+
+        mapInstance.current?.setView(
+          [latitude, longitude],
+          16
+        );
+
+        setLocating(false);
+      },
+
+      (error) => {
+        console.error(error);
+
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError(
+            "Brak dostępu do lokalizacji. Zezwól stronie na lokalizację w ustawieniach przeglądarki."
+          );
+        } else {
+          setLocationError(
+            "Nie udało się pobrać Twojej lokalizacji."
+          );
+        }
+
+        setLocating(false);
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      }
+    );
+  }
+
   function startTracking() {
     if (!navigator.geolocation) {
       setLocationError(
@@ -575,6 +464,7 @@ function findMe() {
             accuracy
           );
         },
+
         (error) => {
           console.error(error);
 
@@ -584,6 +474,7 @@ function findMe() {
 
           setTracking(false);
         },
+
         {
           enableHighAccuracy: true,
           timeout: 15000,
@@ -613,7 +504,10 @@ function findMe() {
     }
 
     if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current);
+      navigator.geolocation.clearWatch(
+        watchId.current
+      );
+
       watchId.current = null;
     }
 
@@ -625,8 +519,7 @@ function findMe() {
 
     setRouteInfo(null);
     setRouteError("");
-
-    const currentPoints = points();
+    setLocationError("");
 
     const map = L.map(element.current, {
       scrollWheelZoom: false,
@@ -643,63 +536,127 @@ function findMe() {
       }
     ).addTo(map);
 
-    currentPoints.forEach((stop, index) => {
+    /* NOCLEG */
+
+    const homeIcon = L.divIcon({
+      className: "",
+      html: `
+        <div class="home-marker">
+          <span>⌂</span>
+        </div>
+      `,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    });
+
+    L.marker(
+      [accommodation.lat, accommodation.lng],
+      {
+        icon: homeIcon,
+        zIndexOffset: 1000,
+      }
+    )
+      .addTo(map)
+      .bindPopup(`
+        <div style="min-width:160px">
+          <strong>🏠 ${accommodation.title}</strong>
+          <div style="margin-top:4px">
+            ${accommodation.address}
+          </div>
+          <div style="margin-top:6px;font-size:12px;color:#71717a">
+            Stały punkt · nie jest częścią trasy
+          </div>
+        </div>
+      `);
+
+    /* PUNKTY TRASY */
+
+    points.forEach((point, index) => {
       const icon = L.divIcon({
         className: "",
-        html: `<div class="map-number">${index + 1}</div>`,
+        html: `
+          <div class="map-number">
+            ${index + 1}
+          </div>
+        `,
         iconSize: [32, 32],
         iconAnchor: [16, 16],
       });
 
-      L.marker([stop.lat, stop.lng], {
+      L.marker([point.lat, point.lng], {
         icon,
       })
         .addTo(map)
         .bindPopup(`
-          <div style="min-width:180px">
-            <strong>${index + 1}. ${stop.title}</strong>
-            <br>
-            ${stop.time}
+          <div style="min-width:190px">
+            <strong>
+              ${index + 1}. ${point.title}
+            </strong>
+
+            ${
+              point.time
+                ? `<div style="margin-top:3px">${point.time}</div>`
+                : ""
+            }
+
+            ${
+              point.description
+                ? `<div style="margin-top:7px">${point.description}</div>`
+                : ""
+            }
           </div>
         `);
     });
 
-    /*
-     * STARTOWY WIDOK:
-     * zawsze trasa w Tallinnie.
-     * Nie pytamy automatycznie o GPS.
-     */
-    if (currentPoints.length) {
-      map.fitBounds(
-        L.latLngBounds(
-          currentPoints.map((point) => [
-            point.lat,
-            point.lng,
-          ])
-        ),
-        {
-          padding: [35, 35],
-        }
-      );
-    } else {
-      map.setView([59.437, 24.7536], 13);
-    }
+    /* STARTOWY WIDOK */
 
-    async function loadWalkingRoute() {
-      if (currentPoints.length < 2) return;
+    const initialCoordinates: L.LatLngExpression[] = [
+      [accommodation.lat, accommodation.lng],
+      ...points.map(
+        (point) => [point.lat, point.lng] as L.LatLngExpression
+      ),
+    ];
+
+    map.fitBounds(
+      L.latLngBounds(initialCoordinates),
+      {
+        padding: [35, 35],
+      }
+    );
+
+    /* DODAWANIE PRZEZ KLIKNIĘCIE */
+
+    map.on("click", (event) => {
+      if (!adding) return;
+
+      onMapClick(
+        event.latlng.lat,
+        event.latlng.lng
+      );
+    });
+
+    /* ROUTING */
+
+    async function loadRoute() {
+      if (points.length < 2) {
+        setRouteInfo(null);
+        return;
+      }
 
       setRouteLoading(true);
       setRouteError("");
 
       try {
         const request = {
-          locations: currentPoints.map((point) => ({
+          locations: points.map((point) => ({
             lat: point.lat,
             lon: point.lng,
             type: "break",
           })),
+
           costing: "pedestrian",
           units: "kilometers",
+
           directions_options: {
             units: "kilometers",
           },
@@ -707,7 +664,9 @@ function findMe() {
 
         const url =
           "https://valhalla1.openstreetmap.de/route?json=" +
-          encodeURIComponent(JSON.stringify(request));
+          encodeURIComponent(
+            JSON.stringify(request)
+          );
 
         const response = await fetch(url);
 
@@ -719,10 +678,11 @@ function findMe() {
 
         const data = await response.json();
 
-        const allCoordinates: [number, number][] = [];
+        const coordinates: [number, number][] =
+          [];
 
         for (const leg of data.trip.legs) {
-          allCoordinates.push(
+          coordinates.push(
             ...decodePolyline(leg.shape)
           );
         }
@@ -732,7 +692,8 @@ function findMe() {
           properties: {},
           geometry: {
             type: "LineString" as const,
-            coordinates: allCoordinates.map(
+
+            coordinates: coordinates.map(
               ([lat, lng]) => [lng, lat]
             ),
           },
@@ -740,7 +701,7 @@ function findMe() {
 
         const layer = L.geoJSON(geoJson, {
           style: {
-            color: "#2563eb",
+            color: theme.blue,
             weight: 5,
             opacity: 0.82,
           },
@@ -756,31 +717,46 @@ function findMe() {
         const bounds = layer.getBounds();
 
         if (bounds.isValid()) {
+          bounds.extend([
+            accommodation.lat,
+            accommodation.lng,
+          ]);
+
           map.fitBounds(bounds, {
             padding: [35, 35],
           });
         }
       } catch (error) {
-        console.error("Routing error:", error);
+        console.error(
+          "Routing error:",
+          error
+        );
 
         setRouteError(
           "Nie udało się pobrać dokładnej trasy pieszej. Pokazuję orientacyjne połączenie punktów."
         );
 
         const fallback = L.polyline(
-          currentPoints.map((point) => [
+          points.map((point) => [
             point.lat,
             point.lng,
           ]),
           {
-            color: "#2563eb",
+            color: theme.blue,
             weight: 4,
             opacity: 0.45,
             dashArray: "7 7",
           }
         ).addTo(map);
 
-        map.fitBounds(fallback.getBounds(), {
+        const bounds = fallback.getBounds();
+
+        bounds.extend([
+          accommodation.lat,
+          accommodation.lng,
+        ]);
+
+        map.fitBounds(bounds, {
           padding: [35, 35],
         });
       } finally {
@@ -788,7 +764,7 @@ function findMe() {
       }
     }
 
-    loadWalkingRoute();
+    void loadRoute();
 
     window.setTimeout(() => {
       map.invalidateSize();
@@ -806,7 +782,7 @@ function findMe() {
       map.remove();
       mapInstance.current = null;
     };
-  }, [day]);
+  }, [points, adding]);
 
   function formatDuration(seconds: number) {
     const minutes = Math.round(seconds / 60);
@@ -824,7 +800,11 @@ function findMe() {
   }
 
   return (
-    <div className="map-wrapper">
+    <div
+      className={`map-wrapper ${
+        adding ? "adding" : ""
+      }`}
+    >
       <div className="map-toolbar">
         <button
           className="map-button primary"
@@ -832,7 +812,7 @@ function findMe() {
           disabled={locating}
         >
           {locating
-            ? "Szukam lokalizacji..."
+            ? "Szukam..."
             : "◎ Moja lokalizacja"}
         </button>
 
@@ -860,6 +840,13 @@ function findMe() {
         </button>
       </div>
 
+      {adding && (
+        <div className="add-hint">
+          Kliknij na mapie miejsce, które chcesz
+          dodać do trasy.
+        </div>
+      )}
+
       {routeLoading && (
         <div className="route-status">
           Wyznaczam trasę pieszą...
@@ -886,159 +873,10 @@ function findMe() {
         </div>
       )}
 
-      <div ref={element} className="map" />
-    </div>
-  );
-}
-
-/* =========================================================
-   COMMENTS
-========================================================= */
-
-function Comments({
-  stopId,
-  username,
-}: {
-  stopId: string;
-  username: string;
-}) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-
-  async function loadComments() {
-    const { data, error } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("stop_id", stopId)
-      .order("created_at", {
-        ascending: true,
-      });
-
-    if (error) {
-      console.error(error);
-      setError(
-        `Błąd Supabase: ${error.message}`
-      );
-      return;
-    }
-
-    setError("");
-    setComments((data ?? []) as Comment[]);
-  }
-
-  useEffect(() => {
-    loadComments();
-  }, [stopId]);
-
-  async function addComment() {
-    const author = username.trim();
-    const comment = text.trim();
-
-    if (!author) {
-      setError(
-        "Najpierw wpisz swoją nazwę u góry strony."
-      );
-      return;
-    }
-
-    if (!comment) return;
-
-    setSending(true);
-    setError("");
-
-    const { error } = await supabase
-      .from("comments")
-      .insert({
-        stop_id: stopId,
-        author,
-        comment,
-      });
-
-    if (error) {
-      console.error(error);
-
-      setError(
-        `Błąd Supabase: ${error.message}`
-      );
-
-      setSending(false);
-      return;
-    }
-
-    setText("");
-    setSending(false);
-
-    await loadComments();
-  }
-
-  return (
-    <div className="comments">
-      {comments.length > 0 && (
-        <div className="comment-list">
-          {comments.map((comment) => (
-            <div
-              className="comment"
-              key={comment.id}
-            >
-              <div className="comment-header">
-                <strong>
-                  {comment.author}
-                </strong>
-
-                <span>
-                  {new Date(
-                    comment.created_at
-                  ).toLocaleString("pl-PL", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </div>
-
-              <div>{comment.comment}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="comment-form">
-        <input
-          value={text}
-          onChange={(e) =>
-            setText(e.target.value)
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              addComment();
-            }
-          }}
-          placeholder={
-            username.trim()
-              ? "Dodaj komentarz..."
-              : "Najpierw wpisz swoją nazwę"
-          }
-          maxLength={500}
-        />
-
-        <button
-          onClick={addComment}
-          disabled={
-            sending || !text.trim()
-          }
-        >
-          {sending ? "..." : "Wyślij"}
-        </button>
-      </div>
-
-      {error && (
-        <div className="error">
-          {error}
-        </div>
-      )}
+      <div
+        ref={element}
+        className="map"
+      />
     </div>
   );
 }
@@ -1060,9 +898,62 @@ export default function App() {
       );
     });
 
+  const [mapPoints, setMapPoints] =
+    useState<MapPoint[]>([]);
+
+  const [loadingPoints, setLoadingPoints] =
+    useState(true);
+
+  const [pointsError, setPointsError] =
+    useState("");
+
+  const [saving, setSaving] =
+    useState(false);
+
+  /* ADD */
+
+  const [adding, setAdding] =
+    useState(false);
+
+  const [newLat, setNewLat] =
+    useState<number | null>(null);
+
+  const [newLng, setNewLng] =
+    useState<number | null>(null);
+
+  const [newTitle, setNewTitle] =
+    useState("");
+
+  const [newDescription, setNewDescription] =
+    useState("");
+
+  const [newTime, setNewTime] =
+    useState("");
+
+  /* EDIT */
+
+  const [editing, setEditing] =
+    useState<MapPoint | null>(null);
+
+  const [editTitle, setEditTitle] =
+    useState("");
+
+  const [editDescription, setEditDescription] =
+    useState("");
+
+  const [editTime, setEditTime] =
+    useState("");
+
   const day =
-    days.find((d) => d.id === selected) ??
-    days[0];
+    days.find(
+      (item) => item.id === selected
+    ) ?? days[0];
+
+  const sortedPoints = useMemo(() => {
+    return [...mapPoints].sort(
+      (a, b) => a.position - b.position
+    );
+  }, [mapPoints]);
 
   function changeUsername(value: string) {
     setUsername(value);
@@ -1072,6 +963,383 @@ export default function App() {
       value
     );
   }
+
+  /* =======================================================
+     LOAD
+  ======================================================= */
+
+  async function loadPoints(dayId: string) {
+    setLoadingPoints(true);
+    setPointsError("");
+
+    const { data, error } = await supabase
+      .from("map_points")
+      .select("*")
+      .eq("day_id", dayId)
+      .order("position", {
+        ascending: true,
+      });
+
+    if (error) {
+      setPointsError(
+        `Błąd punktów mapy: ${error.message}`
+      );
+
+      setLoadingPoints(false);
+      return;
+    }
+
+    setMapPoints(
+      ((data ?? []) as MapPoint[]).sort(
+        (a, b) =>
+          a.position - b.position
+      )
+    );
+
+    setLoadingPoints(false);
+  }
+
+  useEffect(() => {
+    setAdding(false);
+    setEditing(null);
+
+    setNewLat(null);
+    setNewLng(null);
+
+    void loadPoints(selected);
+  }, [selected]);
+
+  /* =======================================================
+     ORDER
+  ======================================================= */
+
+  async function movePoint(
+    index: number,
+    direction: -1 | 1
+  ) {
+    const targetIndex =
+      index + direction;
+
+    if (
+      targetIndex < 0 ||
+      targetIndex >= sortedPoints.length
+    ) {
+      return;
+    }
+
+    const current =
+      sortedPoints[index];
+
+    const target =
+      sortedPoints[targetIndex];
+
+    setSaving(true);
+    setPointsError("");
+
+    const temporaryPosition =
+      -1000000 - current.id;
+
+    const first = await supabase
+      .from("map_points")
+      .update({
+        position: temporaryPosition,
+      })
+      .eq("id", current.id);
+
+    if (first.error) {
+      setPointsError(
+        `Nie udało się zmienić kolejności: ${first.error.message}`
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    const second = await supabase
+      .from("map_points")
+      .update({
+        position: current.position,
+      })
+      .eq("id", target.id);
+
+    if (second.error) {
+      setPointsError(
+        `Nie udało się zmienić kolejności: ${second.error.message}`
+      );
+
+      await loadPoints(selected);
+      setSaving(false);
+      return;
+    }
+
+    const third = await supabase
+      .from("map_points")
+      .update({
+        position: target.position,
+      })
+      .eq("id", current.id);
+
+    if (third.error) {
+      setPointsError(
+        `Nie udało się zmienić kolejności: ${third.error.message}`
+      );
+
+      await loadPoints(selected);
+      setSaving(false);
+      return;
+    }
+
+    await loadPoints(selected);
+
+    setSaving(false);
+  }
+
+  /* =======================================================
+     ADD
+  ======================================================= */
+
+  function beginAdd() {
+    setEditing(null);
+
+    setAdding(true);
+
+    setNewLat(null);
+    setNewLng(null);
+
+    setNewTitle("");
+    setNewDescription("");
+    setNewTime("");
+  }
+
+  function cancelAdd() {
+    setAdding(false);
+
+    setNewLat(null);
+    setNewLng(null);
+
+    setNewTitle("");
+    setNewDescription("");
+    setNewTime("");
+  }
+
+  function chooseNewLocation(
+    lat: number,
+    lng: number
+  ) {
+    setNewLat(lat);
+    setNewLng(lng);
+  }
+
+  async function addPoint() {
+    if (
+      newLat === null ||
+      newLng === null ||
+      !newTitle.trim()
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setPointsError("");
+
+    const maxPosition =
+      sortedPoints.length > 0
+        ? Math.max(
+            ...sortedPoints.map(
+              (point) => point.position
+            )
+          )
+        : 0;
+
+    const { error } = await supabase
+      .from("map_points")
+      .insert({
+        day_id: selected,
+
+        position:
+          maxPosition + 1,
+
+        title:
+          newTitle.trim(),
+
+        description:
+          newDescription.trim() ||
+          null,
+
+        time:
+          newTime.trim() ||
+          null,
+
+        kind: "sight",
+
+        lat: newLat,
+        lng: newLng,
+
+        is_custom: true,
+      });
+
+    if (error) {
+      setPointsError(
+        `Nie udało się dodać miejsca: ${error.message}`
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    cancelAdd();
+
+    await loadPoints(selected);
+
+    setSaving(false);
+  }
+
+  /* =======================================================
+     EDIT
+  ======================================================= */
+
+  function beginEdit(
+    point: MapPoint
+  ) {
+    setAdding(false);
+
+    setEditing(point);
+
+    setEditTitle(point.title);
+
+    setEditDescription(
+      point.description ?? ""
+    );
+
+    setEditTime(
+      point.time ?? ""
+    );
+  }
+
+  async function saveEdit() {
+    if (
+      !editing ||
+      !editTitle.trim()
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setPointsError("");
+
+    const { error } = await supabase
+      .from("map_points")
+      .update({
+        title:
+          editTitle.trim(),
+
+        description:
+          editDescription.trim() ||
+          null,
+
+        time:
+          editTime.trim() ||
+          null,
+      })
+      .eq("id", editing.id);
+
+    if (error) {
+      setPointsError(
+        `Nie udało się zapisać zmian: ${error.message}`
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    setEditing(null);
+
+    await loadPoints(selected);
+
+    setSaving(false);
+  }
+
+  /* =======================================================
+     DELETE
+  ======================================================= */
+
+  async function deletePoint(
+    point: MapPoint
+  ) {
+    const confirmed =
+      window.confirm(
+        `Usunąć „${point.title}” z trasy?`
+      );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    setPointsError("");
+
+    const { error } = await supabase
+      .from("map_points")
+      .delete()
+      .eq("id", point.id);
+
+    if (error) {
+      setPointsError(
+        `Nie udało się usunąć miejsca: ${error.message}`
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    /*
+     * Normalizacja kolejności.
+     */
+
+    const remaining =
+      sortedPoints.filter(
+        (item) =>
+          item.id !== point.id
+      );
+
+    for (
+      let index = 0;
+      index < remaining.length;
+      index++
+    ) {
+      const desiredPosition =
+        index + 1;
+
+      if (
+        remaining[index].position !==
+        desiredPosition
+      ) {
+        const result =
+          await supabase
+            .from("map_points")
+            .update({
+              position:
+                desiredPosition,
+            })
+            .eq(
+              "id",
+              remaining[index].id
+            );
+
+        if (result.error) {
+          console.error(
+            result.error
+          );
+        }
+      }
+    }
+
+    await loadPoints(selected);
+
+    setSaving(false);
+  }
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <>
@@ -1090,7 +1358,8 @@ export default function App() {
         }
 
         button,
-        input {
+        input,
+        textarea {
           font: inherit;
         }
 
@@ -1100,7 +1369,6 @@ export default function App() {
 
         .app {
           min-height: 100vh;
-          background: ${theme.background};
           color: ${theme.primary};
           font-family:
             system-ui,
@@ -1111,7 +1379,6 @@ export default function App() {
         }
 
         .container {
-          width: 100%;
           max-width: 1120px;
           margin: 0 auto;
           padding: 28px 24px 60px;
@@ -1139,76 +1406,89 @@ export default function App() {
         }
 
         .subtitle {
-          color: ${theme.secondary};
           margin: 0;
+          color: ${theme.secondary};
         }
 
         .user-box {
-          margin-top: 20px;
           max-width: 420px;
+          margin-top: 20px;
         }
 
         .user-box label {
           display: block;
+          margin-bottom: 7px;
           font-size: 13px;
           font-weight: 700;
-          margin-bottom: 7px;
         }
 
-        .user-box input {
+        .user-box input,
+        .editor input,
+        .editor textarea {
           width: 100%;
-          padding: 12px 14px;
           border:
             1px solid ${theme.border};
           border-radius: 10px;
-          outline: none;
           background: white;
+          padding: 12px 14px;
+          outline: none;
           font-size: 16px;
         }
 
-        .user-box input:focus {
-          border-color: ${theme.blue};
-          box-shadow:
-            0 0 0 3px
-            rgba(37, 99, 235, .10);
+        .editor textarea {
+          min-height: 100px;
+          resize: vertical;
         }
+
+        input:focus,
+        textarea:focus {
+          border-color:
+            ${theme.blue} !important;
+        }
+
+        /* DAYS */
 
         .tabs {
           display: flex;
-          gap: 8px;
           flex-wrap: wrap;
+          gap: 8px;
           margin-top: 28px;
         }
 
         .tab {
+          min-height: 42px;
           border:
             1px solid ${theme.border};
-          background: white;
-          color: ${theme.primary};
-          padding: 10px 15px;
-          min-height: 42px;
           border-radius: 9px;
-          cursor: pointer;
+          background: white;
+          padding: 10px 15px;
+          color: ${theme.primary};
           font-weight: 700;
+          cursor: pointer;
         }
 
         .tab.active {
-          border-color: ${theme.blue};
-          background: ${theme.blue};
+          border-color:
+            ${theme.blue};
+          background:
+            ${theme.blue};
           color: white;
         }
 
-        .day-layout {
+        /* DAY INFO */
+
+        .day-header {
           display: grid;
           grid-template-columns:
             240px minmax(0, 1fr);
           gap: 34px;
           margin-top: 28px;
+          margin-bottom: 12px;
         }
 
         .day-info h2 {
           margin-top: 0;
-          line-height: 1.2;
+          margin-bottom: 8px;
         }
 
         .day-info p {
@@ -1219,27 +1499,36 @@ export default function App() {
           color: ${theme.secondary};
         }
 
-        .stop {
+        /* PLAN */
+
+        .plan {
+          grid-column: 2;
+        }
+
+        .plan-empty {
+          padding: 20px;
+          border-radius: 12px;
+          background: ${theme.soft};
+          color: ${theme.secondary};
+        }
+
+        .plan-stop {
           display: grid;
           grid-template-columns:
             68px minmax(0, 1fr);
           gap: 16px;
-          padding-bottom: 24px;
           margin-bottom: 20px;
+          padding-bottom: 24px;
           border-bottom:
             1px solid ${theme.border};
         }
 
-        .stop:last-child {
-          border-bottom: none;
-        }
-
         .time {
-          font-weight: 800;
           padding-top: 2px;
+          font-weight: 800;
         }
 
-        .stop h3 {
+        .plan-stop h3 {
           margin: 0;
           font-size: 18px;
           line-height: 1.35;
@@ -1247,17 +1536,16 @@ export default function App() {
 
         .kind {
           display: inline-block;
-          margin-left: 5px;
+          margin-left: 6px;
           color: ${theme.tertiary};
           font-size: 11px;
           font-weight: 500;
-          vertical-align: middle;
         }
 
         .note {
+          margin: 7px 0 0;
           color: ${theme.secondary};
           line-height: 1.55;
-          margin: 7px 0 0;
         }
 
         /* COMMENTS */
@@ -1274,9 +1562,9 @@ export default function App() {
         }
 
         .comment {
-          background: ${theme.soft};
-          border-radius: 9px;
           padding: 10px 12px;
+          border-radius: 9px;
+          background: ${theme.soft};
           line-height: 1.4;
           overflow-wrap: anywhere;
         }
@@ -1312,45 +1600,201 @@ export default function App() {
           font-size: 16px;
         }
 
-        .comment-form input:focus {
-          border-color: ${theme.blue};
-        }
-
-        .comment-form button {
+        .comment-form button,
+        .primary-button {
           border: none;
-          background: ${theme.blue};
-          color: white;
           border-radius: 9px;
+          background: ${theme.blue};
           padding: 10px 14px;
-          cursor: pointer;
+          color: white;
           font-weight: 700;
+          cursor: pointer;
         }
 
-        .comment-form button:disabled {
+        button:disabled {
           opacity: .45;
           cursor: default;
         }
 
         .error {
+          margin-top: 7px;
           color: #b91c1c;
+          font-size: 13px;
+        }
+
+        /* ROUTE */
+
+        .route-section {
+          margin-top: 44px;
+          padding-top: 30px;
+          border-top:
+            1px solid ${theme.border};
+        }
+
+        .route-heading {
+          display: flex;
+          align-items: flex-start;
+          justify-content:
+            space-between;
+          gap: 20px;
+          margin-bottom: 18px;
+        }
+
+        .route-heading h2 {
+          margin: 0 0 5px;
+        }
+
+        .route-heading p {
+          margin: 0;
+          color: ${theme.secondary};
+        }
+
+        .route-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 20px;
+        }
+
+        .route-item {
+          display: grid;
+          grid-template-columns:
+            44px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          padding: 12px;
+          border:
+            1px solid ${theme.border};
+          border-radius: 11px;
+          background: white;
+        }
+
+        .route-number {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: ${theme.blue};
+          color: white;
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .route-name {
+          font-weight: 750;
+        }
+
+        .route-description {
+          margin-top: 3px;
+          color: ${theme.secondary};
+          font-size: 13px;
+          line-height: 1.4;
+        }
+
+        .route-actions {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .small-button {
+          min-width: 36px;
+          min-height: 36px;
+          border:
+            1px solid ${theme.border};
+          border-radius: 8px;
+          background: white;
+          color: ${theme.primary};
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .small-button.edit {
+          padding: 0 10px;
+        }
+
+        .small-button.delete {
+          color: #b91c1c;
+        }
+
+        /* HOME */
+
+        .home-info {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin-bottom: 16px;
+          padding: 12px 14px;
+          border:
+            1px solid ${theme.border};
+          border-radius: 11px;
+          background: ${theme.soft};
+        }
+
+        .home-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 36px;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: #18181b;
+          color: white;
+          font-size: 20px;
+        }
+
+        .home-info strong {
+          display: block;
+        }
+
+        .home-info span {
+          color: ${theme.secondary};
+          font-size: 13px;
+        }
+
+        /* EDITOR */
+
+        .editor {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin: 15px 0;
+          padding: 16px;
+          border:
+            1px solid ${theme.border};
+          border-radius: 12px;
+          background: ${theme.soft};
+        }
+
+        .editor h3 {
+          margin: 0 0 3px;
+        }
+
+        .editor-coordinates {
+          color: ${theme.secondary};
           font-size: 12px;
-          margin-top: 6px;
+        }
+
+        .editor-buttons {
+          display: flex;
+          gap: 8px;
+        }
+
+        .secondary-button {
+          border:
+            1px solid ${theme.border};
+          border-radius: 9px;
+          background: white;
+          padding: 10px 14px;
+          color: ${theme.primary};
+          font-weight: 700;
+          cursor: pointer;
         }
 
         /* MAP */
-
-        .map-section {
-          margin-top: 42px;
-        }
-
-        .map-section h2 {
-          margin-bottom: 5px;
-        }
-
-        .map-description {
-          color: ${theme.secondary};
-          margin: 0 0 15px;
-        }
 
         .map-wrapper {
           width: 100%;
@@ -1360,98 +1804,126 @@ export default function App() {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
-          margin-bottom: 12px;
+          margin: 12px 0;
         }
 
         .map-button {
-          appearance: none;
+          min-height: 42px;
           border:
             1px solid ${theme.border};
-          background: #ffffff;
-          color: ${theme.primary};
-          min-height: 42px;
-          padding: 9px 14px;
           border-radius: 9px;
+          background: white;
+          padding: 9px 14px;
+          color: ${theme.primary};
           font-weight: 700;
           cursor: pointer;
         }
 
         .map-button.primary {
-          background: ${theme.blue};
-          border-color: ${theme.blue};
+          border-color:
+            ${theme.blue};
+          background:
+            ${theme.blue};
           color: white;
         }
 
         .map-button.tracking {
-          background: ${theme.primary};
-          border-color:
+          background:
             ${theme.primary};
           color: white;
         }
 
-        .map-button:disabled {
-          opacity: .55;
-          cursor: default;
-        }
-
         .route-status,
-        .route-summary {
-          margin: 0 0 12px;
+        .route-summary,
+        .add-hint {
+          margin-bottom: 12px;
           padding: 10px 13px;
-          background: ${theme.soft};
           border-radius: 9px;
+          background: ${theme.soft};
           font-size: 14px;
         }
 
+        .add-hint {
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-weight: 650;
+        }
+
         .map-error {
-          margin: 0 0 12px;
+          margin-bottom: 12px;
           padding: 10px 13px;
+          border-radius: 9px;
           background: #fef2f2;
           color: #b91c1c;
-          border-radius: 9px;
           font-size: 13px;
         }
 
         .map {
-          height: 460px;
           width: 100%;
+          height: 480px;
+          overflow: hidden;
           border:
             1px solid ${theme.border};
           border-radius: 14px;
-          overflow: hidden;
           z-index: 0;
         }
 
+        .adding .map {
+          cursor: crosshair;
+          outline:
+            3px solid
+            rgba(37,99,235,.15);
+        }
+
         .map-number {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: ${theme.blue};
-          color: white;
-          border: 3px solid white;
-          box-shadow:
-            0 2px 8px
-            rgba(0, 0, 0, .3);
           display: flex;
           align-items: center;
           justify-content: center;
+          width: 32px;
+          height: 32px;
+          border: 3px solid white;
+          border-radius: 50%;
+          background: ${theme.blue};
+          box-shadow:
+            0 2px 8px
+            rgba(0,0,0,.3);
+          color: white;
           font-size: 13px;
           font-weight: 800;
         }
 
-        /* ===========================
-           MOBILE
-        =========================== */
+        .home-marker {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          border: 3px solid white;
+          border-radius: 50%;
+          background: #18181b;
+          box-shadow:
+            0 2px 10px
+            rgba(0,0,0,.35);
+          color: white;
+        }
+
+        .home-marker span {
+          position: relative;
+          top: -1px;
+          font-size: 25px;
+          font-weight: 800;
+        }
+
+        /* MOBILE */
 
         @media (max-width: 700px) {
           .container {
             padding:
               20px 16px
-              calc(40px + env(safe-area-inset-bottom));
-          }
-
-          header {
-            padding-bottom: 20px;
+              calc(
+                45px +
+                env(safe-area-inset-bottom)
+              );
           }
 
           h1 {
@@ -1470,9 +1942,11 @@ export default function App() {
           .tabs {
             display: grid;
             grid-template-columns:
-              repeat(3, minmax(0, 1fr));
+              repeat(
+                3,
+                minmax(0,1fr)
+              );
             gap: 6px;
-            margin-top: 20px;
           }
 
           .tab {
@@ -1480,42 +1954,29 @@ export default function App() {
             font-size: 12px;
           }
 
-          .day-layout {
+          .day-header {
             display: block;
-            margin-top: 24px;
           }
 
           .day-info {
+            margin-bottom: 25px;
             padding: 16px;
-            background: ${theme.soft};
             border-radius: 12px;
-            margin-bottom: 26px;
+            background: ${theme.soft};
           }
 
-          .day-info h2 {
-            font-size: 21px;
-            margin-bottom: 8px;
-          }
-
-          .day-info p {
-            margin: 6px 0;
-            font-size: 14px;
-          }
-
-          .stop {
+          .plan {
             display: block;
-            padding-bottom: 22px;
-            margin-bottom: 22px;
+          }
+
+          .plan-stop {
+            display: block;
           }
 
           .time {
             display: inline-block;
-            color: ${theme.blue};
             margin-bottom: 5px;
-          }
-
-          .stop h3 {
-            font-size: 18px;
+            color: ${theme.blue};
           }
 
           .kind {
@@ -1523,21 +1984,31 @@ export default function App() {
             margin: 4px 0 0;
           }
 
-          .note {
-            font-size: 15px;
+          .route-heading {
+            display: block;
           }
 
-          .comment-form button {
-            min-width: 76px;
-            min-height: 44px;
+          .route-heading
+          .primary-button {
+            width: 100%;
+            min-height: 46px;
+            margin-top: 15px;
           }
 
-          .comment-form input {
-            min-height: 44px;
+          .route-item {
+            grid-template-columns:
+              38px minmax(0,1fr);
           }
 
-          .map-section {
-            margin-top: 30px;
+          .route-actions {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns:
+              repeat(4,1fr);
+          }
+
+          .small-button {
+            min-height: 42px;
           }
 
           .map-toolbar {
@@ -1547,25 +2018,20 @@ export default function App() {
           }
 
           .map-button {
-            width: 100%;
             min-height: 46px;
-            padding: 10px 8px;
-            font-size: 13px;
           }
 
           .map-button:first-child {
             grid-column: 1 / -1;
           }
 
-          .route-summary,
-          .route-status,
-          .map-error {
-            font-size: 13px;
+          .map {
+            height: 390px;
           }
 
-          .map {
-            height: 380px;
-            border-radius: 12px;
+          .comment-form input,
+          .comment-form button {
+            min-height: 44px;
           }
 
           .leaflet-control-attribution {
@@ -1580,21 +2046,22 @@ export default function App() {
           }
 
           .tabs {
-            grid-template-columns: 1fr;
+            grid-template-columns:
+              1fr;
           }
 
           .tab {
             font-size: 14px;
           }
 
-          .comment-form {
-            display: grid;
+          .route-actions {
             grid-template-columns:
-              minmax(0, 1fr) auto;
+              1fr 1fr;
           }
 
           .map-toolbar {
-            grid-template-columns: 1fr;
+            grid-template-columns:
+              1fr;
           }
 
           .map-button:first-child {
@@ -1603,6 +2070,18 @@ export default function App() {
 
           .map {
             height: 340px;
+          }
+
+          .editor-buttons {
+            display: grid;
+            grid-template-columns:
+              1fr 1fr;
+          }
+
+          .comment-form {
+            display: grid;
+            grid-template-columns:
+              minmax(0,1fr) auto;
           }
         }
       `}</style>
@@ -1642,25 +2121,30 @@ export default function App() {
             </div>
           </header>
 
+          {/* DAYS */}
+
           <div className="tabs">
-            {days.map((d) => (
+            {days.map((item) => (
               <button
                 className={`tab ${
-                  selected === d.id
+                  selected === item.id
                     ? "active"
                     : ""
                 }`}
-                key={d.id}
+                key={item.id}
                 onClick={() =>
-                  setSelected(d.id)
+                  setSelected(item.id)
                 }
               >
-                {d.label} · {d.date}
+                {item.label} ·{" "}
+                {item.date}
               </button>
             ))}
           </div>
 
-          <div className="day-layout">
+          {/* PLAN */}
+
+          <section className="day-header">
             <aside className="day-info">
               <h2>{day.title}</h2>
 
@@ -1675,60 +2159,426 @@ export default function App() {
               </p>
             </aside>
 
-            <div>
-              {day.stops.map(
-                (stop, index) => (
-                  <article
-                    className="stop"
-                    key={stop.id}
-                  >
-                    <div className="time">
-                      {stop.time}
-                    </div>
+            <div className="plan">
+              {loadingPoints ? (
+                <div className="route-status">
+                  Ładuję plan...
+                </div>
+              ) : sortedPoints.length ===
+                0 ? (
+                <div className="plan-empty">
+                  Ten dzień nie ma obecnie
+                  żadnych punktów.
+                </div>
+              ) : (
+                sortedPoints.map(
+                  (point, index) => (
+                    <article
+                      className="plan-stop"
+                      key={point.id}
+                    >
+                      <div className="time">
+                        {point.time ||
+                          "—"}
+                      </div>
 
-                    <div>
-                      <h3>
-                        {index + 1}.{" "}
-                        {stop.title}
+                      <div>
+                        <h3>
+                          {index + 1}.{" "}
+                          {point.title}
 
-                        {stop.kind && (
-                          <span className="kind">
+                          {kindLabel(
+                            point.kind
+                          ) && (
+                            <span className="kind">
+                              {kindLabel(
+                                point.kind
+                              )}
+                            </span>
+                          )}
+                        </h3>
+
+                        {point.description && (
+                          <p className="note">
                             {
-                              labels[
-                                stop.kind
-                              ]
+                              point.description
                             }
-                          </span>
+                          </p>
                         )}
-                      </h3>
 
-                      <p className="note">
-                        {stop.note}
-                      </p>
-
-                      <Comments
-                        stopId={stop.id}
-                        username={username}
-                      />
-                    </div>
-                  </article>
+                        <Comments
+                          stopId={`map-${point.id}`}
+                          username={
+                            username
+                          }
+                        />
+                      </div>
+                    </article>
+                  )
                 )
               )}
             </div>
-          </div>
+          </section>
 
-          <section className="map-section">
-            <h2>
-              Trasa · {day.label}
-            </h2>
+          {/* ROUTE MANAGEMENT */}
 
-            <p className="map-description">
-              Numery na mapie odpowiadają
-              punktom planu. Trasa jest
-              wyznaczana dla ruchu pieszego.
-            </p>
+          <section className="route-section">
+            <div className="route-heading">
+              <div>
+                <h2>
+                  Trasa · {day.label}
+                </h2>
 
-            <Map day={day} />
+                <p>
+                  Kolejność poniżej jest
+                  kolejnością przejścia na
+                  mapie.
+                </p>
+              </div>
+
+              {!adding && (
+                <button
+                  className="primary-button"
+                  onClick={beginAdd}
+                >
+                  + Dodaj miejsce
+                </button>
+              )}
+            </div>
+
+            <div className="home-info">
+              <div className="home-icon">
+                ⌂
+              </div>
+
+              <div>
+                <strong>
+                  Nocleg
+                </strong>
+
+                <span>
+                  Telliskivi tn 26 · stały
+                  punkt, nie można go usunąć
+                </span>
+              </div>
+            </div>
+
+            {pointsError && (
+              <div className="map-error">
+                {pointsError}
+              </div>
+            )}
+
+            {!loadingPoints && (
+              <>
+                {sortedPoints.length >
+                  0 && (
+                  <div className="route-list">
+                    {sortedPoints.map(
+                      (point, index) => (
+                        <div
+                          className="route-item"
+                          key={point.id}
+                        >
+                          <div className="route-number">
+                            {index + 1}
+                          </div>
+
+                          <div>
+                            <div className="route-name">
+                              {point.time &&
+                                `${point.time} · `}
+
+                              {point.title}
+                            </div>
+
+                            {point.description && (
+                              <div className="route-description">
+                                {
+                                  point.description
+                                }
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="route-actions">
+                            <button
+                              className="small-button"
+                              title="Przesuń wyżej"
+                              disabled={
+                                index ===
+                                  0 ||
+                                saving
+                              }
+                              onClick={() =>
+                                void movePoint(
+                                  index,
+                                  -1
+                                )
+                              }
+                            >
+                              ↑
+                            </button>
+
+                            <button
+                              className="small-button"
+                              title="Przesuń niżej"
+                              disabled={
+                                index ===
+                                  sortedPoints.length -
+                                    1 ||
+                                saving
+                              }
+                              onClick={() =>
+                                void movePoint(
+                                  index,
+                                  1
+                                )
+                              }
+                            >
+                              ↓
+                            </button>
+
+                            <button
+                              className="small-button edit"
+                              disabled={
+                                saving
+                              }
+                              onClick={() =>
+                                beginEdit(
+                                  point
+                                )
+                              }
+                            >
+                              Edytuj
+                            </button>
+
+                            <button
+                              className="small-button delete"
+                              disabled={
+                                saving
+                              }
+                              title="Usuń"
+                              onClick={() =>
+                                void deletePoint(
+                                  point
+                                )
+                              }
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                {/* ADD */}
+
+                {adding && (
+                  <div className="editor">
+                    <h3>
+                      Nowe miejsce
+                    </h3>
+
+                    {newLat === null ||
+                    newLng === null ? (
+                      <>
+                        <div>
+                          Kliknij wybraną
+                          lokalizację na mapie
+                          poniżej.
+                        </div>
+
+                        <button
+                          className="secondary-button"
+                          onClick={
+                            cancelAdd
+                          }
+                        >
+                          Anuluj
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="editor-coordinates">
+                          Lokalizacja:{" "}
+                          {newLat.toFixed(
+                            5
+                          )}
+                          ,{" "}
+                          {newLng.toFixed(
+                            5
+                          )}
+                        </div>
+
+                        <input
+                          value={
+                            newTitle
+                          }
+                          onChange={(e) =>
+                            setNewTitle(
+                              e.target
+                                .value
+                            )
+                          }
+                          placeholder="Nazwa miejsca"
+                          maxLength={
+                            120
+                          }
+                        />
+
+                        <input
+                          value={newTime}
+                          onChange={(e) =>
+                            setNewTime(
+                              e.target
+                                .value
+                            )
+                          }
+                          placeholder="Godzina, np. 16:30 (opcjonalnie)"
+                          maxLength={20}
+                        />
+
+                        <textarea
+                          value={
+                            newDescription
+                          }
+                          onChange={(e) =>
+                            setNewDescription(
+                              e.target
+                                .value
+                            )
+                          }
+                          placeholder="Opis miejsca"
+                          maxLength={
+                            1000
+                          }
+                        />
+
+                        <div className="editor-buttons">
+                          <button
+                            className="primary-button"
+                            disabled={
+                              !newTitle.trim() ||
+                              saving
+                            }
+                            onClick={() =>
+                              void addPoint()
+                            }
+                          >
+                            {saving
+                              ? "Zapisuję..."
+                              : "Dodaj do trasy"}
+                          </button>
+
+                          <button
+                            className="secondary-button"
+                            disabled={
+                              saving
+                            }
+                            onClick={
+                              cancelAdd
+                            }
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* EDIT */}
+
+                {editing && (
+                  <div className="editor">
+                    <h3>
+                      Edytuj miejsce
+                    </h3>
+
+                    <input
+                      value={
+                        editTitle
+                      }
+                      onChange={(e) =>
+                        setEditTitle(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Nazwa miejsca"
+                      maxLength={120}
+                    />
+
+                    <input
+                      value={
+                        editTime
+                      }
+                      onChange={(e) =>
+                        setEditTime(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Godzina, np. 16:30"
+                      maxLength={20}
+                    />
+
+                    <textarea
+                      value={
+                        editDescription
+                      }
+                      onChange={(e) =>
+                        setEditDescription(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Opis miejsca"
+                      maxLength={1000}
+                    />
+
+                    <div className="editor-buttons">
+                      <button
+                        className="primary-button"
+                        disabled={
+                          !editTitle.trim() ||
+                          saving
+                        }
+                        onClick={() =>
+                          void saveEdit()
+                        }
+                      >
+                        {saving
+                          ? "Zapisuję..."
+                          : "Zapisz"}
+                      </button>
+
+                      <button
+                        className="secondary-button"
+                        disabled={
+                          saving
+                        }
+                        onClick={() =>
+                          setEditing(
+                            null
+                          )
+                        }
+                      >
+                        Anuluj
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <Map
+                  points={sortedPoints}
+                  adding={adding}
+                  onMapClick={
+                    chooseNewLocation
+                  }
+                />
+              </>
+            )}
           </section>
         </div>
       </main>
