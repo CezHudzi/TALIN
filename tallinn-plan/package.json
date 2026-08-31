@@ -1,1 +1,24 @@
-{"name":"tallinn-plan","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite","build":"tsc -b && vite build","preview":"vite preview"},"dependencies":{"@vitejs/plugin-react":"latest","vite":"latest","typescript":"~5.9.3","react":"latest","react-dom":"latest"},"devDependencies":{"@types/react":"latest","@types/react-dom":"latest"}}
+{
+  "name": "tallinn-plan",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "leaflet": "^1.9.4",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "~5.9.3",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.20",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  }
+}
