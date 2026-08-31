@@ -462,58 +462,94 @@ function Map({ day }: { day: Day }) {
     }
   }
 
-  function findMe() {
-    if (!navigator.geolocation) {
-      setLocationError(
-        "Ta przeglądarka nie obsługuje lokalizacji."
-      );
-      return;
-    }
-
-    setLocating(true);
-    setLocationError("");
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } =
-          position.coords;
-
-        updateUserLocation(
-          latitude,
-          longitude,
-          accuracy
-        );
-
-        mapInstance.current?.setView(
-          [latitude, longitude],
-          16
-        );
-
-        setLocating(false);
-      },
-      (error) => {
-        console.error(error);
-
-        if (error.code === error.PERMISSION_DENIED) {
-          setLocationError(
-            "Brak dostępu do lokalizacji. Zezwól stronie na lokalizację w ustawieniach przeglądarki."
-          );
-        } else {
-          setLocationError(
-            "Nie udało się pobrać Twojej lokalizacji."
-          );
-        }
-
-        setLocating(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000,
-      }
+function findMe() {
+  if (!navigator.geolocation) {
+    setLocationError(
+      "Ta przeglądarka nie obsługuje lokalizacji."
     );
+    return;
   }
 
+  // Geolokalizacja w przeglądarce wymaga bezpiecznego kontekstu
+  if (!window.isSecureContext) {
+    setLocationError(
+      "Lokalizacja wymaga połączenia HTTPS."
+    );
+    return;
+  }
+
+  setLocating(true);
+  setLocationError("");
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude, accuracy } =
+        position.coords;
+
+      console.log("Pobrano lokalizację:", {
+        latitude,
+        longitude,
+        accuracy,
+      });
+
+      updateUserLocation(
+        latitude,
+        longitude,
+        accuracy
+      );
+
+      mapInstance.current?.setView(
+        [latitude, longitude],
+        16
+      );
+
+      setLocationError("");
+      setLocating(false);
+    },
+
+    (error) => {
+      console.error(
+        "Błąd geolokalizacji:",
+        error.code,
+        error.message
+      );
+
+      switch (error.code) {
+        case 1:
+          setLocationError(
+            "Brak dostępu do lokalizacji. Zezwól tej stronie na korzystanie z lokalizacji w ustawieniach przeglądarki."
+          );
+          break;
+
+        case 2:
+          setLocationError(
+            "Nie udało się ustalić Twojej pozycji. Sprawdź, czy lokalizacja/GPS jest włączona i spróbuj ponownie."
+          );
+          break;
+
+        case 3:
+          setLocationError(
+            "Przekroczono czas oczekiwania na lokalizację. Spróbuj ponownie, najlepiej w miejscu z lepszym zasięgiem GPS."
+          );
+          break;
+
+        default:
+          setLocationError(
+            `Nie udało się pobrać lokalizacji: ${error.message || "nieznany błąd"}`
+          );
+      }
+
+      setLocating(false);
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 30000,
+      maximumAge: 0,
+    }
+  );
+}
+   
   function startTracking() {
     if (!navigator.geolocation) {
       setLocationError(
