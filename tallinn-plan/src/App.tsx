@@ -402,19 +402,14 @@ function Map({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude, accuracy } =
-          position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
 
         updateUserLocation(latitude, longitude, accuracy);
 
-        mapInstance.current?.setView(
-          [latitude, longitude],
-          16
-        );
+        mapInstance.current?.setView([latitude, longitude], 16);
 
         setLocating(false);
       },
-
       (error) => {
         console.error(error);
 
@@ -430,7 +425,6 @@ function Map({
 
         setLocating(false);
       },
-
       {
         enableHighAccuracy: true,
         timeout: 15000,
@@ -452,42 +446,32 @@ function Map({
     setLocationError("");
     setTracking(true);
 
-    watchId.current =
-      navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } =
-            position.coords;
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
 
-          updateUserLocation(
-            latitude,
-            longitude,
-            accuracy
-          );
-        },
+        updateUserLocation(latitude, longitude, accuracy);
+      },
+      (error) => {
+        console.error(error);
 
-        (error) => {
-          console.error(error);
+        setLocationError(
+          "Nie udało się śledzić lokalizacji."
+        );
 
-          setLocationError(
-            "Nie udało się śledzić lokalizacji."
-          );
-
-          setTracking(false);
-        },
-
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 3000,
-        }
-      );
+        setTracking(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 3000,
+      }
+    );
   }
 
   function stopTracking() {
     if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(
-        watchId.current
-      );
+      navigator.geolocation.clearWatch(watchId.current);
 
       watchId.current = null;
     }
@@ -504,10 +488,7 @@ function Map({
     }
 
     if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(
-        watchId.current
-      );
-
+      navigator.geolocation.clearWatch(watchId.current);
       watchId.current = null;
     }
 
@@ -549,13 +530,10 @@ function Map({
       iconAnchor: [20, 20],
     });
 
-    L.marker(
-      [accommodation.lat, accommodation.lng],
-      {
-        icon: homeIcon,
-        zIndexOffset: 1000,
-      }
-    )
+    L.marker([accommodation.lat, accommodation.lng], {
+      icon: homeIcon,
+      zIndexOffset: 1000,
+    })
       .addTo(map)
       .bindPopup(`
         <div style="min-width:160px">
@@ -569,7 +547,7 @@ function Map({
         </div>
       `);
 
-    /* PUNKTY TRASY */
+    /* PUNKTY */
 
     points.forEach((point, index) => {
       const icon = L.divIcon({
@@ -608,8 +586,6 @@ function Map({
         `);
     });
 
-    /* STARTOWY WIDOK */
-
     const initialCoordinates: L.LatLngExpression[] = [
       [accommodation.lat, accommodation.lng],
       ...points.map(
@@ -617,25 +593,15 @@ function Map({
       ),
     ];
 
-    map.fitBounds(
-      L.latLngBounds(initialCoordinates),
-      {
-        padding: [35, 35],
-      }
-    );
-
-    /* DODAWANIE PRZEZ KLIKNIĘCIE */
+    map.fitBounds(L.latLngBounds(initialCoordinates), {
+      padding: [35, 35],
+    });
 
     map.on("click", (event) => {
       if (!adding) return;
 
-      onMapClick(
-        event.latlng.lat,
-        event.latlng.lng
-      );
+      onMapClick(event.latlng.lat, event.latlng.lng);
     });
-
-    /* ROUTING */
 
     async function loadRoute() {
       if (points.length < 2) {
@@ -664,27 +630,20 @@ function Map({
 
         const url =
           "https://valhalla1.openstreetmap.de/route?json=" +
-          encodeURIComponent(
-            JSON.stringify(request)
-          );
+          encodeURIComponent(JSON.stringify(request));
 
         const response = await fetch(url);
 
         if (!response.ok) {
-          throw new Error(
-            `Routing HTTP ${response.status}`
-          );
+          throw new Error(`Routing HTTP ${response.status}`);
         }
 
         const data = await response.json();
 
-        const coordinates: [number, number][] =
-          [];
+        const coordinates: [number, number][] = [];
 
         for (const leg of data.trip.legs) {
-          coordinates.push(
-            ...decodePolyline(leg.shape)
-          );
+          coordinates.push(...decodePolyline(leg.shape));
         }
 
         const geoJson = {
@@ -727,10 +686,7 @@ function Map({
           });
         }
       } catch (error) {
-        console.error(
-          "Routing error:",
-          error
-        );
+        console.error("Routing error:", error);
 
         setRouteError(
           "Nie udało się pobrać dokładnej trasy pieszej. Pokazuję orientacyjne połączenie punktów."
@@ -772,10 +728,7 @@ function Map({
 
     return () => {
       if (watchId.current !== null) {
-        navigator.geolocation.clearWatch(
-          watchId.current
-        );
-
+        navigator.geolocation.clearWatch(watchId.current);
         watchId.current = null;
       }
 
@@ -800,11 +753,7 @@ function Map({
   }
 
   return (
-    <div
-      className={`map-wrapper ${
-        adding ? "adding" : ""
-      }`}
-    >
+    <div className={`map-wrapper ${adding ? "adding" : ""}`}>
       <div className="map-toolbar">
         <button
           className="map-button primary"
@@ -842,8 +791,7 @@ function Map({
 
       {adding && (
         <div className="add-hint">
-          Kliknij na mapie miejsce, które chcesz
-          dodać do trasy.
+          Kliknij na mapie miejsce, które chcesz dodać do trasy.
         </div>
       )}
 
@@ -873,10 +821,7 @@ function Map({
         </div>
       )}
 
-      <div
-        ref={element}
-        className="map"
-      />
+      <div ref={element} className="map" />
     </div>
   );
 }
@@ -886,68 +831,35 @@ function Map({
 ========================================================= */
 
 export default function App() {
-  const [selected, setSelected] =
-    useState("fri");
+  const [selected, setSelected] = useState("fri");
 
-  const [username, setUsername] =
-    useState(() => {
-      return (
-        localStorage.getItem(
-          "tallinn_username"
-        ) ?? ""
-      );
-    });
+  const [username, setUsername] = useState(() => {
+    return localStorage.getItem("tallinn_username") ?? "";
+  });
 
-  const [mapPoints, setMapPoints] =
-    useState<MapPoint[]>([]);
-
-  const [loadingPoints, setLoadingPoints] =
-    useState(true);
-
-  const [pointsError, setPointsError] =
-    useState("");
-
-  const [saving, setSaving] =
-    useState(false);
+  const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
+  const [loadingPoints, setLoadingPoints] = useState(true);
+  const [pointsError, setPointsError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   /* ADD */
 
-  const [adding, setAdding] =
-    useState(false);
-
-  const [newLat, setNewLat] =
-    useState<number | null>(null);
-
-  const [newLng, setNewLng] =
-    useState<number | null>(null);
-
-  const [newTitle, setNewTitle] =
-    useState("");
-
-  const [newDescription, setNewDescription] =
-    useState("");
-
-  const [newTime, setNewTime] =
-    useState("");
+  const [adding, setAdding] = useState(false);
+  const [newLat, setNewLat] = useState<number | null>(null);
+  const [newLng, setNewLng] = useState<number | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newTime, setNewTime] = useState("");
 
   /* EDIT */
 
-  const [editing, setEditing] =
-    useState<MapPoint | null>(null);
-
-  const [editTitle, setEditTitle] =
-    useState("");
-
-  const [editDescription, setEditDescription] =
-    useState("");
-
-  const [editTime, setEditTime] =
-    useState("");
+  const [editing, setEditing] = useState<MapPoint | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editTime, setEditTime] = useState("");
 
   const day =
-    days.find(
-      (item) => item.id === selected
-    ) ?? days[0];
+    days.find((item) => item.id === selected) ?? days[0];
 
   const sortedPoints = useMemo(() => {
     return [...mapPoints].sort(
@@ -991,8 +903,7 @@ export default function App() {
 
     setMapPoints(
       ((data ?? []) as MapPoint[]).sort(
-        (a, b) =>
-          a.position - b.position
+        (a, b) => a.position - b.position
       )
     );
 
@@ -1017,8 +928,7 @@ export default function App() {
     index: number,
     direction: -1 | 1
   ) {
-    const targetIndex =
-      index + direction;
+    const targetIndex = index + direction;
 
     if (
       targetIndex < 0 ||
@@ -1027,11 +937,8 @@ export default function App() {
       return;
     }
 
-    const current =
-      sortedPoints[index];
-
-    const target =
-      sortedPoints[targetIndex];
+    const current = sortedPoints[index];
+    const target = sortedPoints[targetIndex];
 
     setSaving(true);
     setPointsError("");
@@ -1100,7 +1007,6 @@ export default function App() {
 
   function beginAdd() {
     setEditing(null);
-
     setAdding(true);
 
     setNewLat(null);
@@ -1155,26 +1061,15 @@ export default function App() {
       .from("map_points")
       .insert({
         day_id: selected,
-
-        position:
-          maxPosition + 1,
-
-        title:
-          newTitle.trim(),
-
+        position: maxPosition + 1,
+        title: newTitle.trim(),
         description:
-          newDescription.trim() ||
-          null,
-
+          newDescription.trim() || null,
         time:
-          newTime.trim() ||
-          null,
-
+          newTime.trim() || null,
         kind: "sight",
-
         lat: newLat,
         lng: newLng,
-
         is_custom: true,
       });
 
@@ -1198,22 +1093,14 @@ export default function App() {
      EDIT
   ======================================================= */
 
-  function beginEdit(
-    point: MapPoint
-  ) {
+  function beginEdit(point: MapPoint) {
     setAdding(false);
 
     setEditing(point);
 
     setEditTitle(point.title);
-
-    setEditDescription(
-      point.description ?? ""
-    );
-
-    setEditTime(
-      point.time ?? ""
-    );
+    setEditDescription(point.description ?? "");
+    setEditTime(point.time ?? "");
   }
 
   async function saveEdit() {
@@ -1230,16 +1117,11 @@ export default function App() {
     const { error } = await supabase
       .from("map_points")
       .update({
-        title:
-          editTitle.trim(),
-
+        title: editTitle.trim(),
         description:
-          editDescription.trim() ||
-          null,
-
+          editDescription.trim() || null,
         time:
-          editTime.trim() ||
-          null,
+          editTime.trim() || null,
       })
       .eq("id", editing.id);
 
@@ -1263,13 +1145,10 @@ export default function App() {
      DELETE
   ======================================================= */
 
-  async function deletePoint(
-    point: MapPoint
-  ) {
-    const confirmed =
-      window.confirm(
-        `Usunąć „${point.title}” z trasy?`
-      );
+  async function deletePoint(point: MapPoint) {
+    const confirmed = window.confirm(
+      `Usunąć „${point.title}” z trasy?`
+    );
 
     if (!confirmed) return;
 
@@ -1290,44 +1169,33 @@ export default function App() {
       return;
     }
 
-    /*
-     * Normalizacja kolejności.
-     */
-
-    const remaining =
-      sortedPoints.filter(
-        (item) =>
-          item.id !== point.id
-      );
+    const remaining = sortedPoints.filter(
+      (item) => item.id !== point.id
+    );
 
     for (
       let index = 0;
       index < remaining.length;
       index++
     ) {
-      const desiredPosition =
-        index + 1;
+      const desiredPosition = index + 1;
 
       if (
         remaining[index].position !==
         desiredPosition
       ) {
-        const result =
-          await supabase
-            .from("map_points")
-            .update({
-              position:
-                desiredPosition,
-            })
-            .eq(
-              "id",
-              remaining[index].id
-            );
+        const result = await supabase
+          .from("map_points")
+          .update({
+            position: desiredPosition,
+          })
+          .eq(
+            "id",
+            remaining[index].id
+          );
 
         if (result.error) {
-          console.error(
-            result.error
-          );
+          console.error(result.error);
         }
       }
     }
@@ -1475,7 +1343,7 @@ export default function App() {
           color: white;
         }
 
-        /* DAY INFO */
+        /* PLAN */
 
         .day-header {
           display: grid;
@@ -1498,8 +1366,6 @@ export default function App() {
         .transport {
           color: ${theme.secondary};
         }
-
-        /* PLAN */
 
         .plan {
           grid-column: 2;
@@ -1653,6 +1519,7 @@ export default function App() {
           display: flex;
           flex-direction: column;
           gap: 8px;
+          margin-top: 20px;
           margin-bottom: 20px;
         }
 
@@ -1761,7 +1628,7 @@ export default function App() {
           display: flex;
           flex-direction: column;
           gap: 10px;
-          margin: 15px 0;
+          margin: 15px 0 22px;
           padding: 16px;
           border:
             1px solid ${theme.border};
@@ -1988,8 +1855,7 @@ export default function App() {
             display: block;
           }
 
-          .route-heading
-          .primary-button {
+          .route-heading .primary-button {
             width: 100%;
             min-height: 46px;
             margin-top: 15px;
@@ -2046,8 +1912,7 @@ export default function App() {
           }
 
           .tabs {
-            grid-template-columns:
-              1fr;
+            grid-template-columns: 1fr;
           }
 
           .tab {
@@ -2060,8 +1925,7 @@ export default function App() {
           }
 
           .map-toolbar {
-            grid-template-columns:
-              1fr;
+            grid-template-columns: 1fr;
           }
 
           .map-button:first-child {
@@ -2098,8 +1962,7 @@ export default function App() {
             </h1>
 
             <p className="subtitle">
-              4–7 września 2026 · baza:
-              Telliskivi tn 26
+              4–7 września 2026 · baza: Telliskivi tn 26
             </p>
 
             <div className="user-box">
@@ -2111,9 +1974,7 @@ export default function App() {
                 id="username"
                 value={username}
                 onChange={(e) =>
-                  changeUsername(
-                    e.target.value
-                  )
+                  changeUsername(e.target.value)
                 }
                 placeholder="np. Cezary"
                 maxLength={40}
@@ -2136,8 +1997,7 @@ export default function App() {
                   setSelected(item.id)
                 }
               >
-                {item.label} ·{" "}
-                {item.date}
+                {item.label} · {item.date}
               </button>
             ))}
           </div>
@@ -2149,9 +2009,7 @@ export default function App() {
               <h2>{day.title}</h2>
 
               <p>
-                <strong>
-                  {day.distance}
-                </strong>
+                <strong>{day.distance}</strong>
               </p>
 
               <p className="transport">
@@ -2164,11 +2022,9 @@ export default function App() {
                 <div className="route-status">
                   Ładuję plan...
                 </div>
-              ) : sortedPoints.length ===
-                0 ? (
+              ) : sortedPoints.length === 0 ? (
                 <div className="plan-empty">
-                  Ten dzień nie ma obecnie
-                  żadnych punktów.
+                  Ten dzień nie ma obecnie żadnych punktów.
                 </div>
               ) : (
                 sortedPoints.map(
@@ -2178,39 +2034,29 @@ export default function App() {
                       key={point.id}
                     >
                       <div className="time">
-                        {point.time ||
-                          "—"}
+                        {point.time || "—"}
                       </div>
 
                       <div>
                         <h3>
-                          {index + 1}.{" "}
-                          {point.title}
+                          {index + 1}. {point.title}
 
-                          {kindLabel(
-                            point.kind
-                          ) && (
+                          {kindLabel(point.kind) && (
                             <span className="kind">
-                              {kindLabel(
-                                point.kind
-                              )}
+                              {kindLabel(point.kind)}
                             </span>
                           )}
                         </h3>
 
                         {point.description && (
                           <p className="note">
-                            {
-                              point.description
-                            }
+                            {point.description}
                           </p>
                         )}
 
                         <Comments
                           stopId={`map-${point.id}`}
-                          username={
-                            username
-                          }
+                          username={username}
                         />
                       </div>
                     </article>
@@ -2230,9 +2076,7 @@ export default function App() {
                 </h2>
 
                 <p>
-                  Kolejność poniżej jest
-                  kolejnością przejścia na
-                  mapie.
+                  Kolejność punktów poniżej jest kolejnością przejścia.
                 </p>
               </div>
 
@@ -2252,13 +2096,10 @@ export default function App() {
               </div>
 
               <div>
-                <strong>
-                  Nocleg
-                </strong>
+                <strong>Nocleg</strong>
 
                 <span>
-                  Telliskivi tn 26 · stały
-                  punkt, nie można go usunąć
+                  Telliskivi tn 26 · stały punkt, nie można go usunąć
                 </span>
               </div>
             </div>
@@ -2271,8 +2112,181 @@ export default function App() {
 
             {!loadingPoints && (
               <>
-                {sortedPoints.length >
-                  0 && (
+                {/* =========================================
+                    MAPA JEST TERAZ PRZED LISTĄ
+                ========================================= */}
+
+                <Map
+                  points={sortedPoints}
+                  adding={adding}
+                  onMapClick={chooseNewLocation}
+                />
+
+                {/* ADD */}
+
+                {adding && (
+                  <div className="editor">
+                    <h3>
+                      Nowe miejsce
+                    </h3>
+
+                    {newLat === null ||
+                    newLng === null ? (
+                      <>
+                        <div>
+                          Kliknij wybraną lokalizację na mapie powyżej.
+                        </div>
+
+                        <button
+                          className="secondary-button"
+                          onClick={cancelAdd}
+                        >
+                          Anuluj
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="editor-coordinates">
+                          Lokalizacja:{" "}
+                          {newLat.toFixed(5)},{" "}
+                          {newLng.toFixed(5)}
+                        </div>
+
+                        <input
+                          value={newTitle}
+                          onChange={(e) =>
+                            setNewTitle(
+                              e.target.value
+                            )
+                          }
+                          placeholder="Nazwa miejsca"
+                          maxLength={120}
+                        />
+
+                        <input
+                          value={newTime}
+                          onChange={(e) =>
+                            setNewTime(
+                              e.target.value
+                            )
+                          }
+                          placeholder="Godzina, np. 16:30 (opcjonalnie)"
+                          maxLength={20}
+                        />
+
+                        <textarea
+                          value={newDescription}
+                          onChange={(e) =>
+                            setNewDescription(
+                              e.target.value
+                            )
+                          }
+                          placeholder="Opis miejsca"
+                          maxLength={1000}
+                        />
+
+                        <div className="editor-buttons">
+                          <button
+                            className="primary-button"
+                            disabled={
+                              !newTitle.trim() ||
+                              saving
+                            }
+                            onClick={() =>
+                              void addPoint()
+                            }
+                          >
+                            {saving
+                              ? "Zapisuję..."
+                              : "Dodaj do trasy"}
+                          </button>
+
+                          <button
+                            className="secondary-button"
+                            disabled={saving}
+                            onClick={cancelAdd}
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* EDIT */}
+
+                {editing && (
+                  <div className="editor">
+                    <h3>
+                      Edytuj miejsce
+                    </h3>
+
+                    <input
+                      value={editTitle}
+                      onChange={(e) =>
+                        setEditTitle(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Nazwa miejsca"
+                      maxLength={120}
+                    />
+
+                    <input
+                      value={editTime}
+                      onChange={(e) =>
+                        setEditTime(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Godzina, np. 16:30"
+                      maxLength={20}
+                    />
+
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) =>
+                        setEditDescription(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Opis miejsca"
+                      maxLength={1000}
+                    />
+
+                    <div className="editor-buttons">
+                      <button
+                        className="primary-button"
+                        disabled={
+                          !editTitle.trim() ||
+                          saving
+                        }
+                        onClick={() =>
+                          void saveEdit()
+                        }
+                      >
+                        {saving
+                          ? "Zapisuję..."
+                          : "Zapisz"}
+                      </button>
+
+                      <button
+                        className="secondary-button"
+                        disabled={saving}
+                        onClick={() =>
+                          setEditing(null)
+                        }
+                      >
+                        Anuluj
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* LISTA POD MAPĄ */}
+
+                {sortedPoints.length > 0 && (
                   <div className="route-list">
                     {sortedPoints.map(
                       (point, index) => (
@@ -2294,9 +2308,7 @@ export default function App() {
 
                             {point.description && (
                               <div className="route-description">
-                                {
-                                  point.description
-                                }
+                                {point.description}
                               </div>
                             )}
                           </div>
@@ -2306,8 +2318,7 @@ export default function App() {
                               className="small-button"
                               title="Przesuń wyżej"
                               disabled={
-                                index ===
-                                  0 ||
+                                index === 0 ||
                                 saving
                               }
                               onClick={() =>
@@ -2341,13 +2352,9 @@ export default function App() {
 
                             <button
                               className="small-button edit"
-                              disabled={
-                                saving
-                              }
+                              disabled={saving}
                               onClick={() =>
-                                beginEdit(
-                                  point
-                                )
+                                beginEdit(point)
                               }
                             >
                               Edytuj
@@ -2355,9 +2362,7 @@ export default function App() {
 
                             <button
                               className="small-button delete"
-                              disabled={
-                                saving
-                              }
+                              disabled={saving}
                               title="Usuń"
                               onClick={() =>
                                 void deletePoint(
@@ -2373,210 +2378,6 @@ export default function App() {
                     )}
                   </div>
                 )}
-
-                {/* ADD */}
-
-                {adding && (
-                  <div className="editor">
-                    <h3>
-                      Nowe miejsce
-                    </h3>
-
-                    {newLat === null ||
-                    newLng === null ? (
-                      <>
-                        <div>
-                          Kliknij wybraną
-                          lokalizację na mapie
-                          poniżej.
-                        </div>
-
-                        <button
-                          className="secondary-button"
-                          onClick={
-                            cancelAdd
-                          }
-                        >
-                          Anuluj
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="editor-coordinates">
-                          Lokalizacja:{" "}
-                          {newLat.toFixed(
-                            5
-                          )}
-                          ,{" "}
-                          {newLng.toFixed(
-                            5
-                          )}
-                        </div>
-
-                        <input
-                          value={
-                            newTitle
-                          }
-                          onChange={(e) =>
-                            setNewTitle(
-                              e.target
-                                .value
-                            )
-                          }
-                          placeholder="Nazwa miejsca"
-                          maxLength={
-                            120
-                          }
-                        />
-
-                        <input
-                          value={newTime}
-                          onChange={(e) =>
-                            setNewTime(
-                              e.target
-                                .value
-                            )
-                          }
-                          placeholder="Godzina, np. 16:30 (opcjonalnie)"
-                          maxLength={20}
-                        />
-
-                        <textarea
-                          value={
-                            newDescription
-                          }
-                          onChange={(e) =>
-                            setNewDescription(
-                              e.target
-                                .value
-                            )
-                          }
-                          placeholder="Opis miejsca"
-                          maxLength={
-                            1000
-                          }
-                        />
-
-                        <div className="editor-buttons">
-                          <button
-                            className="primary-button"
-                            disabled={
-                              !newTitle.trim() ||
-                              saving
-                            }
-                            onClick={() =>
-                              void addPoint()
-                            }
-                          >
-                            {saving
-                              ? "Zapisuję..."
-                              : "Dodaj do trasy"}
-                          </button>
-
-                          <button
-                            className="secondary-button"
-                            disabled={
-                              saving
-                            }
-                            onClick={
-                              cancelAdd
-                            }
-                          >
-                            Anuluj
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* EDIT */}
-
-                {editing && (
-                  <div className="editor">
-                    <h3>
-                      Edytuj miejsce
-                    </h3>
-
-                    <input
-                      value={
-                        editTitle
-                      }
-                      onChange={(e) =>
-                        setEditTitle(
-                          e.target.value
-                        )
-                      }
-                      placeholder="Nazwa miejsca"
-                      maxLength={120}
-                    />
-
-                    <input
-                      value={
-                        editTime
-                      }
-                      onChange={(e) =>
-                        setEditTime(
-                          e.target.value
-                        )
-                      }
-                      placeholder="Godzina, np. 16:30"
-                      maxLength={20}
-                    />
-
-                    <textarea
-                      value={
-                        editDescription
-                      }
-                      onChange={(e) =>
-                        setEditDescription(
-                          e.target.value
-                        )
-                      }
-                      placeholder="Opis miejsca"
-                      maxLength={1000}
-                    />
-
-                    <div className="editor-buttons">
-                      <button
-                        className="primary-button"
-                        disabled={
-                          !editTitle.trim() ||
-                          saving
-                        }
-                        onClick={() =>
-                          void saveEdit()
-                        }
-                      >
-                        {saving
-                          ? "Zapisuję..."
-                          : "Zapisz"}
-                      </button>
-
-                      <button
-                        className="secondary-button"
-                        disabled={
-                          saving
-                        }
-                        onClick={() =>
-                          setEditing(
-                            null
-                          )
-                        }
-                      >
-                        Anuluj
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <Map
-                  points={sortedPoints}
-                  adding={adding}
-                  onMapClick={
-                    chooseNewLocation
-                  }
-                />
               </>
             )}
           </section>
