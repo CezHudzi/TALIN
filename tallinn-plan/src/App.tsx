@@ -49,6 +49,15 @@ type CommentRow = {
   created_at: string;
 };
 
+type SearchResult = {
+  place_id: number;
+  display_name: string;
+  name?: string;
+  lat: string;
+  lon: string;
+  type?: string;
+};
+
 /* =========================================================
    CONSTANTS
 ========================================================= */
@@ -295,10 +304,12 @@ function Comments({
 function Map({
   points,
   adding,
+  selectedLocation,
   onMapClick,
 }: {
   points: MapPoint[];
   adding: boolean;
+  selectedLocation: { lat: number; lng: number } | null;
   onMapClick: (lat: number, lng: number) => void;
 }) {
   const element = useRef<HTMLDivElement | null>(null);
@@ -340,14 +351,14 @@ function Map({
       }
     }
 
-    const allCoordinates: L.LatLngExpression[] = [
+    const coordinates: L.LatLngExpression[] = [
       [accommodation.lat, accommodation.lng],
       ...points.map(
         (point) => [point.lat, point.lng] as L.LatLngExpression
       ),
     ];
 
-    map.fitBounds(L.latLngBounds(allCoordinates), {
+    map.fitBounds(L.latLngBounds(coordinates), {
       padding: [35, 35],
     });
   }
@@ -455,10 +466,7 @@ function Map({
       (error) => {
         console.error(error);
 
-        setLocationError(
-          "Nie udało się śledzić lokalizacji."
-        );
-
+        setLocationError("Nie udało się śledzić lokalizacji.");
         setTracking(false);
       },
       {
@@ -472,7 +480,6 @@ function Map({
   function stopTracking() {
     if (watchId.current !== null) {
       navigator.geolocation.clearWatch(watchId.current);
-
       watchId.current = null;
     }
 
@@ -547,7 +554,7 @@ function Map({
         </div>
       `);
 
-    /* PUNKTY */
+    /* PUNKTY TRASY */
 
     points.forEach((point, index) => {
       const icon = L.divIcon({
@@ -586,6 +593,30 @@ function Map({
         `);
     });
 
+    /* NOWO WYBRANA LOKALIZACJA */
+
+    if (adding && selectedLocation) {
+      const newIcon = L.divIcon({
+        className: "",
+        html: `<div class="new-location-marker">+</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+
+      L.marker(
+        [selectedLocation.lat, selectedLocation.lng],
+        {
+          icon: newIcon,
+          zIndexOffset: 1500,
+        }
+      )
+        .addTo(map)
+        .bindPopup("Nowe miejsce")
+        .openPopup();
+    }
+
+    /* STARTOWY WIDOK */
+
     const initialCoordinates: L.LatLngExpression[] = [
       [accommodation.lat, accommodation.lng],
       ...points.map(
@@ -593,15 +624,38 @@ function Map({
       ),
     ];
 
+    if (selectedLocation) {
+      initialCoordinates.push([
+        selectedLocation.lat,
+        selectedLocation.lng,
+      ]);
+    }
+
     map.fitBounds(L.latLngBounds(initialCoordinates), {
       padding: [35, 35],
     });
 
+    /*
+     * Jeżeli lokalizacja została wybrana z wyszukiwarki,
+     * przybliżamy mapę do niej.
+     */
+    if (adding && selectedLocation) {
+      map.setView(
+        [selectedLocation.lat, selectedLocation.lng],
+        17
+      );
+    }
+
     map.on("click", (event) => {
       if (!adding) return;
 
-      onMapClick(event.latlng.lat, event.latlng.lng);
+      onMapClick(
+        event.latlng.lat,
+        event.latlng.lng
+      );
     });
+
+    /* ROUTING */
 
     async function loadRoute() {
       if (points.length < 2) {
@@ -643,7 +697,9 @@ function Map({
         const coordinates: [number, number][] = [];
 
         for (const leg of data.trip.legs) {
-          coordinates.push(...decodePolyline(leg.shape));
+          coordinates.push(
+            ...decodePolyline(leg.shape)
+          );
         }
 
         const geoJson = {
@@ -673,17 +729,23 @@ function Map({
           time: data.trip.summary.time,
         });
 
-        const bounds = layer.getBounds();
+        /*
+         * Nie zmieniamy zoomu na całą trasę,
+         * jeżeli właśnie wybieramy nowe miejsce.
+         */
+        if (!adding || !selectedLocation) {
+          const bounds = layer.getBounds();
 
-        if (bounds.isValid()) {
-          bounds.extend([
-            accommodation.lat,
-            accommodation.lng,
-          ]);
+          if (bounds.isValid()) {
+            bounds.extend([
+              accommodation.lat,
+              accommodation.lng,
+            ]);
 
-          map.fitBounds(bounds, {
-            padding: [35, 35],
-          });
+            map.fitBounds(bounds, {
+              padding: [35, 35],
+            });
+          }
         }
       } catch (error) {
         console.error("Routing error:", error);
@@ -692,7 +754,7 @@ function Map({
           "Nie udało się pobrać dokładnej trasy pieszej. Pokazuję orientacyjne połączenie punktów."
         );
 
-        const fallback = L.polyline(
+        L.polyline(
           points.map((point) => [
             point.lat,
             point.lng,
@@ -704,17 +766,6 @@ function Map({
             dashArray: "7 7",
           }
         ).addTo(map);
-
-        const bounds = fallback.getBounds();
-
-        bounds.extend([
-          accommodation.lat,
-          accommodation.lng,
-        ]);
-
-        map.fitBounds(bounds, {
-          padding: [35, 35],
-        });
       } finally {
         setRouteLoading(false);
       }
@@ -735,7 +786,7 @@ function Map({
       map.remove();
       mapInstance.current = null;
     };
-  }, [points, adding]);
+  }, [points, adding, selectedLocation]);
 
   function formatDuration(seconds: number) {
     const minutes = Math.round(seconds / 60);
@@ -791,7 +842,7 @@ function Map({
 
       {adding && (
         <div className="add-hint">
-          Kliknij na mapie miejsce, które chcesz dodać do trasy.
+          Wyszukaj miejsce albo kliknij jego lokalizację bezpośrednio na mapie.
         </div>
       )}
 
@@ -845,11 +896,23 @@ export default function App() {
   /* ADD */
 
   const [adding, setAdding] = useState(false);
+
   const [newLat, setNewLat] = useState<number | null>(null);
   const [newLng, setNewLng] = useState<number | null>(null);
+
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newTime, setNewTime] = useState("");
+
+  /* SEARCH */
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+
+  const [searchResults, setSearchResults] =
+    useState<SearchResult[]>([]);
+
+  const [searchError, setSearchError] = useState("");
 
   /* EDIT */
 
@@ -866,6 +929,14 @@ export default function App() {
       (a, b) => a.position - b.position
     );
   }, [mapPoints]);
+
+  const selectedLocation =
+    newLat !== null && newLng !== null
+      ? {
+          lat: newLat,
+          lng: newLng,
+        }
+      : null;
 
   function changeUsername(value: string) {
     setUsername(value);
@@ -916,6 +987,10 @@ export default function App() {
 
     setNewLat(null);
     setNewLng(null);
+
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchError("");
 
     void loadPoints(selected);
   }, [selected]);
@@ -1015,6 +1090,10 @@ export default function App() {
     setNewTitle("");
     setNewDescription("");
     setNewTime("");
+
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchError("");
   }
 
   function cancelAdd() {
@@ -1026,6 +1105,10 @@ export default function App() {
     setNewTitle("");
     setNewDescription("");
     setNewTime("");
+
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchError("");
   }
 
   function chooseNewLocation(
@@ -1034,6 +1117,105 @@ export default function App() {
   ) {
     setNewLat(lat);
     setNewLng(lng);
+  }
+
+  /* =======================================================
+     SEARCH
+  ======================================================= */
+
+  async function searchPlaces() {
+    const query = searchQuery.trim();
+
+    if (!query) return;
+
+    setSearching(true);
+    setSearchError("");
+    setSearchResults([]);
+
+    try {
+      /*
+       * Tallinn mniej więcej:
+       *
+       * zachód 24.55
+       * północ 59.55
+       * wschód 24.95
+       * południe 59.30
+       *
+       * bounded=1 ogranicza wyniki do tego obszaru.
+       */
+
+      const params = new URLSearchParams({
+        q: `${query}, Tallinn, Estonia`,
+        format: "jsonv2",
+        addressdetails: "1",
+        namedetails: "1",
+        limit: "6",
+        countrycodes: "ee",
+        viewbox: "24.55,59.55,24.95,59.30",
+        bounded: "1",
+        "accept-language": "pl,en,et",
+      });
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}`
+        );
+      }
+
+      const data =
+        (await response.json()) as SearchResult[];
+
+      setSearchResults(data);
+
+      if (data.length === 0) {
+        setSearchError(
+          "Nie znaleziono takiego miejsca w Tallinnie."
+        );
+      }
+    } catch (error) {
+      console.error(error);
+
+      setSearchError(
+        "Nie udało się wyszukać miejsca. Możesz wskazać je ręcznie na mapie."
+      );
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function chooseSearchResult(
+    result: SearchResult
+  ) {
+    const lat = Number(result.lat);
+    const lng = Number(result.lon);
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng)
+    ) {
+      return;
+    }
+
+    setNewLat(lat);
+    setNewLng(lng);
+
+    /*
+     * Nominatim czasami zwraca "name",
+     * a czasami tylko display_name.
+     */
+
+    const suggestedName =
+      result.name?.trim() ||
+      result.display_name.split(",")[0].trim();
+
+    setNewTitle(suggestedName);
+
+    setSearchResults([]);
+    setSearchError("");
   }
 
   async function addPoint() {
@@ -1063,13 +1245,18 @@ export default function App() {
         day_id: selected,
         position: maxPosition + 1,
         title: newTitle.trim(),
+
         description:
           newDescription.trim() || null,
+
         time:
           newTime.trim() || null,
+
         kind: "sight",
+
         lat: newLat,
         lng: newLng,
+
         is_custom: true,
       });
 
@@ -1118,8 +1305,10 @@ export default function App() {
       .from("map_points")
       .update({
         title: editTitle.trim(),
+
         description:
           editDescription.trim() || null,
+
         time:
           editTime.trim() || null,
       })
@@ -1292,7 +1481,8 @@ export default function App() {
 
         .user-box input,
         .editor input,
-        .editor textarea {
+        .editor textarea,
+        .search-input {
           width: 100%;
           border:
             1px solid ${theme.border};
@@ -1622,6 +1812,88 @@ export default function App() {
           font-size: 13px;
         }
 
+        /* SEARCH */
+
+        .search-box {
+          margin-bottom: 14px;
+          padding: 14px;
+          border:
+            1px solid ${theme.border};
+          border-radius: 11px;
+          background: white;
+        }
+
+        .search-label {
+          display: block;
+          margin-bottom: 8px;
+          font-size: 13px;
+          font-weight: 750;
+        }
+
+        .search-row {
+          display: grid;
+          grid-template-columns:
+            minmax(0,1fr) auto;
+          gap: 8px;
+        }
+
+        .search-button {
+          border: none;
+          border-radius: 9px;
+          background: ${theme.primary};
+          padding: 10px 16px;
+          color: white;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .search-results {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 10px;
+        }
+
+        .search-result {
+          width: 100%;
+          border:
+            1px solid ${theme.border};
+          border-radius: 9px;
+          background: ${theme.soft};
+          padding: 10px 12px;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .search-result:hover {
+          border-color: ${theme.blue};
+          background: #eff6ff;
+        }
+
+        .search-result-name {
+          font-weight: 750;
+          line-height: 1.3;
+        }
+
+        .search-result-address {
+          margin-top: 3px;
+          color: ${theme.secondary};
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .search-help {
+          margin-top: 8px;
+          color: ${theme.tertiary};
+          font-size: 12px;
+        }
+
+        .search-error {
+          margin-top: 8px;
+          color: #b91c1c;
+          font-size: 13px;
+        }
+
         /* EDITOR */
 
         .editor {
@@ -1781,6 +2053,23 @@ export default function App() {
           font-weight: 800;
         }
 
+        .new-location-marker {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border: 3px solid white;
+          border-radius: 50%;
+          background: #16a34a;
+          box-shadow:
+            0 2px 10px
+            rgba(0,0,0,.35);
+          color: white;
+          font-size: 24px;
+          font-weight: 800;
+        }
+
         /* MOBILE */
 
         @media (max-width: 700px) {
@@ -1809,10 +2098,7 @@ export default function App() {
           .tabs {
             display: grid;
             grid-template-columns:
-              repeat(
-                3,
-                minmax(0,1fr)
-              );
+              repeat(3,minmax(0,1fr));
             gap: 6px;
           }
 
@@ -1900,6 +2186,15 @@ export default function App() {
             min-height: 44px;
           }
 
+          .search-row {
+            grid-template-columns:
+              minmax(0,1fr) auto;
+          }
+
+          .search-button {
+            min-height: 46px;
+          }
+
           .leaflet-control-attribution {
             font-size: 8px !important;
           }
@@ -1946,6 +2241,14 @@ export default function App() {
             display: grid;
             grid-template-columns:
               minmax(0,1fr) auto;
+          }
+
+          .search-row {
+            grid-template-columns: 1fr;
+          }
+
+          .search-button {
+            width: 100%;
           }
         }
       `}</style>
@@ -2066,7 +2369,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ROUTE MANAGEMENT */}
+          {/* ROUTE */}
 
           <section className="route-section">
             <div className="route-heading">
@@ -2113,28 +2416,128 @@ export default function App() {
             {!loadingPoints && (
               <>
                 {/* =========================================
-                    MAPA JEST TERAZ PRZED LISTĄ
+                    WYSZUKIWARKA
                 ========================================= */}
+
+                {adding && (
+                  <div className="search-box">
+                    <label
+                      className="search-label"
+                      htmlFor="place-search"
+                    >
+                      Wyszukaj miejsce w Tallinnie
+                    </label>
+
+                    <div className="search-row">
+                      <input
+                        id="place-search"
+                        className="search-input"
+                        value={searchQuery}
+                        onChange={(e) =>
+                          setSearchQuery(
+                            e.target.value
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+
+                            void searchPlaces();
+                          }
+                        }}
+                        placeholder="np. Alexander Nevsky Cathedral"
+                      />
+
+                      <button
+                        className="search-button"
+                        disabled={
+                          searching ||
+                          !searchQuery.trim()
+                        }
+                        onClick={() =>
+                          void searchPlaces()
+                        }
+                      >
+                        {searching
+                          ? "Szukam..."
+                          : "Szukaj"}
+                      </button>
+                    </div>
+
+                    <div className="search-help">
+                      Możesz też pominąć wyszukiwanie i wskazać miejsce bezpośrednio na mapie.
+                    </div>
+
+                    {searchError && (
+                      <div className="search-error">
+                        {searchError}
+                      </div>
+                    )}
+
+                    {searchResults.length > 0 && (
+                      <div className="search-results">
+                        {searchResults.map(
+                          (result) => {
+                            const title =
+                              result.name ||
+                              result.display_name.split(
+                                ","
+                              )[0];
+
+                            return (
+                              <button
+                                key={
+                                  result.place_id
+                                }
+                                className="search-result"
+                                onClick={() =>
+                                  chooseSearchResult(
+                                    result
+                                  )
+                                }
+                              >
+                                <div className="search-result-name">
+                                  {title}
+                                </div>
+
+                                <div className="search-result-address">
+                                  {
+                                    result.display_name
+                                  }
+                                </div>
+                              </button>
+                            );
+                          }
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* MAP */}
 
                 <Map
                   points={sortedPoints}
                   adding={adding}
-                  onMapClick={chooseNewLocation}
+                  selectedLocation={
+                    selectedLocation
+                  }
+                  onMapClick={
+                    chooseNewLocation
+                  }
                 />
 
-                {/* ADD */}
+                {/* ADD FORM */}
 
                 {adding && (
                   <div className="editor">
-                    <h3>
-                      Nowe miejsce
-                    </h3>
+                    <h3>Nowe miejsce</h3>
 
                     {newLat === null ||
                     newLng === null ? (
                       <>
                         <div>
-                          Kliknij wybraną lokalizację na mapie powyżej.
+                          Wyszukaj miejsce powyżej albo kliknij jego lokalizację na mapie.
                         </div>
 
                         <button
@@ -2284,7 +2687,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* LISTA POD MAPĄ */}
+                {/* LISTA */}
 
                 {sortedPoints.length > 0 && (
                   <div className="route-list">
@@ -2308,7 +2711,9 @@ export default function App() {
 
                             {point.description && (
                               <div className="route-description">
-                                {point.description}
+                                {
+                                  point.description
+                                }
                               </div>
                             )}
                           </div>
@@ -2354,7 +2759,9 @@ export default function App() {
                               className="small-button edit"
                               disabled={saving}
                               onClick={() =>
-                                beginEdit(point)
+                                beginEdit(
+                                  point
+                                )
                               }
                             >
                               Edytuj
